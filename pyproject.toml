@@ -1,0 +1,85 @@
+[project]
+name = "redactyl"
+version = "1.0.0"
+description = "Fast, deterministic PII redaction using type-preserving tokens ([NAME_1], [EMAIL_2]) with perfect reversibility"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Miloš Živković", email = "me@milos.rs" }
+]
+keywords = [
+    "pii",
+    "privacy",
+    "redaction",
+    "llm",
+    "ai",
+    "data-protection",
+    "gdpr",
+    "anonymization",
+    "presidio",
+    "gliner",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "presidio-analyzer>=2.2.0",
+    "presidio-anonymizer>=2.2.0",
+    "spacy>=3.0.0",
+    "nameparser>=1.1.0",
+    "pydantic>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/screensailor/redactyl"
+Repository = "https://github.com/screensailor/redactyl"
+Issues = "https://github.com/screensailor/redactyl/issues"
+Documentation = "https://github.com/screensailor/redactyl#readme"
+
+[project.optional-dependencies]
+gliner = ["gliner>=0.2.21"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "hypothesis>=6.0.0",
+    "ruff>=0.2.0",
+    "pyright>=1.1.0",
+    "pytest-asyncio>=1.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "Q", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportUnusedImport = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --cov=redactyl --cov-report=term-missing"
