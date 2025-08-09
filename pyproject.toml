@@ -1,12 +1,12 @@
 [project]
 name = "redactyl"
-version = "0.1.0"
+version = "0.1.1"
 description = "Fast, deterministic PII redaction using type-preserving tokens ([NAME_1], [EMAIL_2]) with perfect reversibility"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
-    { name = "Miloš Živković", email = "me@milos.rs" }
+    { name = "screensailor" }
 ]
 keywords = [
     "pii",

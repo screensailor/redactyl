@@ -1,6 +1,6 @@
 """Redactyl: Fast, deterministic PII redaction using type-preserving tokens with perfect reversibility."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from redactyl.callbacks import CallbackContext
 from redactyl.core import PIILoop
