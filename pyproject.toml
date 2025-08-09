@@ -1,6 +1,6 @@
 [project]
 name = "redactyl"
-version = "1.0.0"
+version = "0.1.0"
 description = "Fast, deterministic PII redaction using type-preserving tokens ([NAME_1], [EMAIL_2]) with perfect reversibility"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,7 +21,7 @@ keywords = [
     "gliner",
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

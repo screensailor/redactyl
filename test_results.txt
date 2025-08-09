@@ -1,0 +1,63 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.10, pytest-8.4.1, pluggy-1.6.0 -- /Users/milos/git/screensailor/redactyl/.venv/bin/python
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: /Users/milos/git/screensailor/redactyl
+configfile: pyproject.toml
+testpaths: tests
+plugins: hypothesis-6.137.1, cov-6.2.1
+collecting ... collected 185 items
+
+tests/integration/test_batch_real_world.py::TestBatchRealWorld::test_customer_support_ticket PASSED [  0%]
+tests/integration/test_batch_real_world.py::TestBatchRealWorld::test_medical_record_scenario PASSED [  1%]
+tests/integration/test_batch_real_world.py::TestBatchRealWorld::test_email_thread_scenario PASSED [  1%]
+tests/integration/test_batch_real_world.py::TestBatchRealWorld::test_performance_with_many_fields PASSED [  2%]
+tests/integration/test_consistent_tokens.py::TestConsistentTokens::test_basic_consistency PASSED [  2%]
+tests/integration/test_consistent_tokens.py::TestConsistentTokens::test_case_insensitive_matching PASSED [  3%]
+tests/integration/test_consistent_tokens.py::TestConsistentTokens::test_different_entities_different_tokens PASSED [  3%]
+tests/integration/test_consistent_tokens.py::TestConsistentTokens::test_token_numbering PASSED [  4%]
+tests/integration/test_consistent_tokens.py::TestConsistentTokens::test_name_component_consistency PASSED [  4%]
+tests/integration/test_content_pattern_handling.py::TestContentPatternHandling::test_double_newline_in_content PASSED [  5%]
+tests/integration/test_content_pattern_handling.py::TestContentPatternHandling::test_position_tracking_vs_legacy PASSED [  5%]
+tests/integration/test_content_pattern_handling.py::TestContentPatternHandling::test_smart_batch_detector_default PASSED [  6%]
+tests/integration/test_content_pattern_handling.py::TestContentPatternHandling::test_empty_fields_handling PASSED [  7%]
+tests/integration/test_content_pattern_handling.py::TestContentPatternHandling::test_unicode_and_special_chars PASSED [  7%]
+tests/integration/test_content_pattern_handling.py::TestContentPatternHandling::test_no_word_fusion_between_fields PASSED [  8%]
+tests/integration/test_core_loop.py::TestCoreLoop::test_simple_round_trip PASSED [  8%]
+tests/integration/test_core_loop.py::TestCoreLoop::test_empty_text PASSED [  9%]
+tests/integration/test_core_loop.py::TestCoreLoop::test_no_pii_detected PASSED [  9%]
+tests/integration/test_core_loop.py::TestCoreLoop::test_multiple_same_type_entities PASSED [ 10%]
+tests/integration/test_core_loop.py::TestCoreLoop::test_overlapping_entities_rejected PASSED [ 10%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_overlapping_tokens_in_llm_response PASSED [ 11%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_nested_tokens PASSED [ 11%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_special_characters_in_pii PASSED [ 12%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_unicode_and_emoji_handling PASSED [ 12%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_very_long_pii_values PASSED [ 13%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_empty_pii_values PASSED [ 14%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_malformed_token_formats PASSED [ 14%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_token_at_boundaries PASSED [ 15%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_concurrent_state_modifications PASSED [ 15%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_pii_types_case_sensitivity PASSED [ 16%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_session_with_no_pii PASSED [ 16%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_extremely_large_token_indices PASSED [ 17%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_state_metadata_preservation PASSED [ 17%]
+tests/integration/test_edge_cases.py::TestEdgeCases::test_token_collision_different_types PASSED [ 18%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_redactyl_works_without_gliner PASSED [ 18%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_detector_with_explicit_gliner_disable PASSED [ 19%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_gliner_parser_availability_check PASSED [ 20%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_warning_when_gliner_requested_but_unavailable PASSED [ 20%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_graceful_fallback_chain PASSED [ 21%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_consistent_api_with_and_without_gliner[True] PASSED [ 21%]
+tests/integration/test_gliner_optional_integration.py::TestGLiNEROptionalIntegration::test_consistent_api_with_and_without_gliner[False] PASSED [ 22%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_components_share_index PASSED [ 22%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_same_first_name_reuses_index PASSED [ 23%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_different_last_name_different_person PASSED [ 23%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_complex_name_components_grouped PASSED [ 24%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_partial_then_full_name PASSED [ 24%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_multiple_people_mixed_patterns PASSED [ 25%]
+tests/integration/test_name_component_grouping.py::TestNameComponentGrouping::test_non_adjacent_components_not_grouped PASSED [ 25%]
+tests/integration/test_name_components.py::TestNameComponents::test_basic_name_parsing PASSED [ 26%]
+tests/integration/test_name_components.py::TestNameComponents::test_name_component_tokens PASSED [ 27%]
+tests/integration/test_name_components.py::TestNameComponents::test_multiple_names PASSED [ 27%]
+tests/integration/test_name_components.py::TestNameComponents::test_partial_name_references PASSED [ 28%]
+tests/integration/test_name_components.py::TestNameComponents::test_name_with_email_correlation 
