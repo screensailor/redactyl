@@ -1,4 +1,4 @@
-"""Example demonstrating the callback pattern in pii-loop.
+"""Example demonstrating the callback pattern in redactyl.
 
 This example shows how to use callbacks instead of logging/printing
 for event handling in PII detection and redaction.

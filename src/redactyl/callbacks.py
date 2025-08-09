@@ -32,7 +32,7 @@ class CallbackContext:
         """Create a context with default warning callbacks."""
         return cls(
             on_gliner_unavailable=lambda: warnings.warn(
-                "GLiNER is not installed or unavailable. Install with: pip install pii-loop[gliner]. "
+                "GLiNER is not installed or unavailable. Install with: pip install redactyl[gliner]. "
                 "Falling back to nameparser for name component detection.",
                 UserWarning,
                 stacklevel=3

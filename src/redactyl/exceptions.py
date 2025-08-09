@@ -1,10 +1,10 @@
-"""Custom exceptions for pii-loop with helpful error messages."""
+"""Custom exceptions for redactyl with helpful error messages."""
 
 from typing import Any
 
 
 class PIILoopError(Exception):
-    """Base exception for all pii-loop errors."""
+    """Base exception for all redactyl errors."""
 
     pass
 

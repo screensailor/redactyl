@@ -1,1 +1,1 @@
-"""Integration tests for pii-loop."""
+"""Integration tests for redactyl."""

@@ -1,5 +1,5 @@
 """
-Proof of concept for dynamic PII detection in pii-loop.
+Proof of concept for dynamic PII detection in redactyl.
 
 This example demonstrates how to handle fields where we don't know
 ahead of time if they contain PII.
@@ -11,7 +11,7 @@ from enum import Enum, auto
 from dataclasses import dataclass
 import re
 
-# Import from existing pii-loop
+# Import from existing redactyl
 from redactyl.types import PIIType, PIIEntity
 from redactyl.detectors import BaseDetector
 from redactyl.core import PIILoop

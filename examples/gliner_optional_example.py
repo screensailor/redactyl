@@ -3,7 +3,7 @@
 Example demonstrating GLiNER as an optional dependency.
 
 GLiNER provides enhanced name parsing capabilities but is optional.
-Install with: pip install pii-loop[gliner]
+Install with: pip install redactyl[gliner]
 
 This example shows how the library gracefully handles both cases.
 """
@@ -27,7 +27,7 @@ def test_gliner_availability():
         print(f"  Model: {parser.model_name}")
     else:
         print("✗ GLiNER is not available")
-        print("  Install with: pip install pii-loop[gliner]")
+        print("  Install with: pip install redactyl[gliner]")
         print("  Falling back to nameparser for name component detection")
     
     print()
@@ -84,7 +84,7 @@ def demo_name_detection(use_gliner: bool = True):
 def main():
     """Run the demonstration."""
     print("\n" + "=" * 60)
-    print("PII-Loop: GLiNER Optional Dependency Example")
+    print("Redactyl: GLiNER Optional Dependency Example")
     print("=" * 60)
     
     # Check GLiNER availability
@@ -103,14 +103,14 @@ def main():
     print("\n" + "=" * 60)
     print("Summary")
     print("=" * 60)
-    print("\nThe pii-loop library works with or without GLiNER:")
+    print("\nThe redactyl library works with or without GLiNER:")
     print("• With GLiNER: Enhanced name component detection using ML model")
     print("• Without GLiNER: Falls back to rule-based nameparser")
     print("\nBoth approaches provide name component parsing capabilities!")
     
     if not has_gliner:
         print("\nTo enable GLiNER support:")
-        print("  pip install pii-loop[gliner]")
+        print("  pip install redactyl[gliner]")
 
 
 if __name__ == "__main__":

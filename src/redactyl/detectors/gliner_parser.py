@@ -1,7 +1,7 @@
 """GLiNER-based name component parser.
 
 This module provides optional GLiNER support for enhanced name parsing.
-GLiNER must be installed separately: pip install pii-loop[gliner]
+GLiNER must be installed separately: pip install redactyl[gliner]
 
 We intentionally import the GLiNER symbol at module load with a fallback
 to `None` so tests and downstream code can patch or inspect availability via
@@ -43,7 +43,7 @@ class GlinerNameParser:
     GLiNER is an optional dependency. If not installed, this parser
     will gracefully return None and allow fallback to nameparser.
     
-    Installation: pip install pii-loop[gliner]
+    Installation: pip install redactyl[gliner]
     """
 
     model_name: str = "urchade/gliner_multi_pii-v1"
@@ -74,7 +74,7 @@ class GlinerNameParser:
                 # Never let callbacks break initialization
                 warnings.warn(
                     "GLiNER is not installed or unavailable. Install with: "
-                    "pip install pii-loop[gliner]. Falling back to nameparser.",
+                    "pip install redactyl[gliner]. Falling back to nameparser.",
                     UserWarning,
                     stacklevel=3,
                 )

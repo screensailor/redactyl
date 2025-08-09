@@ -39,7 +39,7 @@ class PresidioDetector(BaseDetector):
     """PII detector using Microsoft Presidio.
     
     Supports optional GLiNER integration for enhanced name parsing.
-    Install GLiNER with: pip install pii-loop[gliner]
+    Install GLiNER with: pip install redactyl[gliner]
     """
 
     confidence_threshold: float = 0.7

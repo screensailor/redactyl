@@ -1,1 +1,1 @@
-"""Test suite for pii-loop."""
+"""Test suite for redactyl."""

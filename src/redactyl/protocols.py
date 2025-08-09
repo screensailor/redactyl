@@ -1,4 +1,4 @@
-"""Common protocols used across pii-loop."""
+"""Common protocols used across redactyl."""
 
 from typing import Protocol, runtime_checkable
 

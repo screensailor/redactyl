@@ -1,4 +1,4 @@
-"""Tests for the callback system in pii-loop."""
+"""Tests for the callback system in redactyl."""
 
 import warnings
 from unittest.mock import Mock, patch

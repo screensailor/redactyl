@@ -1,1 +1,1 @@
-"""Unit tests for pii-loop."""
+"""Unit tests for redactyl."""
