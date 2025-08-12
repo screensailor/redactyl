@@ -25,6 +25,15 @@ try:  # pragma: no cover - exercised via unit tests
 except Exception:  # ImportError or any failure
     GLiNER = None  # type: ignore[assignment]
 
+# Global cache for loaded GLiNER models to avoid repeated downloads
+_GLINER_MODEL_CACHE: dict[str, Any] = {}
+
+
+def _clear_gliner_cache() -> None:
+    """Clear the GLiNER model cache. Used for testing."""
+    global _GLINER_MODEL_CACHE
+    _GLINER_MODEL_CACHE.clear()
+
 
 def _gliner_unavailable() -> bool:
     """Return True if GLiNER appears unavailable in the current runtime.
@@ -83,12 +92,21 @@ class GlinerNameParser:
             self._available = False
 
     def _ensure_initialized(self) -> None:
-        """Lazy initialize the GLiNER model."""
+        """Lazy initialize the GLiNER model with caching."""
         if not self._initialized:
             try:
                 if _gliner_unavailable():
                     raise ImportError("gliner not available")
-                self._model = GLiNER.from_pretrained(self.model_name)  # type: ignore[union-attr]
+                
+                # Check cache first to avoid repeated downloads
+                # But only use cache if GLiNER is still available (for test mocking)
+                if self.model_name in _GLINER_MODEL_CACHE and not _gliner_unavailable():
+                    self._model = _GLINER_MODEL_CACHE[self.model_name]
+                else:
+                    # Load model and cache it
+                    self._model = GLiNER.from_pretrained(self.model_name)  # type: ignore[union-attr]
+                    _GLINER_MODEL_CACHE[self.model_name] = self._model
+                
                 self._initialized = True
                 self._available = True
             except ImportError:

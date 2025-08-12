@@ -7,11 +7,12 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel, Field
 
 from redactyl.batch import BatchDetector
+from redactyl.callbacks import CallbackContext
 from redactyl.core import PIILoop
 from redactyl.detectors.base import PIIDetector
 from redactyl.entity_tracker import GlobalEntityTracker
@@ -19,11 +20,19 @@ from redactyl.types import (
     PIIEntity,
     PIIType,
     RedactionState,
+    RedactionToken,
     UnredactionIssue,
 )
 
+
 # Sentinel value to distinguish unset from None
-_UNSET = object()
+class _UnsetType:
+    """Sentinel type for unset values."""
+
+    pass
+
+
+_UNSET = _UnsetType()
 
 # Type variables for generic function signatures
 T = TypeVar("T")
@@ -32,16 +41,16 @@ P = TypeVar("P")
 
 class HallucinationAction(Enum):
     """Actions to take when hallucinated tokens are detected during unredaction."""
-    
+
     PRESERVE = auto()  # Keep the token as-is
-    REPLACE = auto()   # Replace with custom text
-    THROW = auto()     # Raise an exception
-    IGNORE = auto()    # Remove the token
+    REPLACE = auto()  # Replace with custom text
+    THROW = auto()  # Raise an exception
+    IGNORE = auto()  # Remove the token
 
 
 class HallucinationError(Exception):
     """Exception raised when hallucinated tokens are detected and action is THROW."""
-    
+
     def __init__(self, issues: list[UnredactionIssue]):
         self.issues = issues
         tokens = [issue.token for issue in issues]
@@ -51,25 +60,25 @@ class HallucinationError(Exception):
 @dataclass
 class HallucinationResponse:
     """Response for a single hallucination issue."""
-    
+
     action: HallucinationAction
     replacement_text: str | None = None  # Used when action is REPLACE
-    
+
     @classmethod
     def preserve(cls) -> "HallucinationResponse":
         """Create a response to preserve the hallucinated token."""
         return cls(action=HallucinationAction.PRESERVE)
-    
+
     @classmethod
     def replace(cls, text: str) -> "HallucinationResponse":
         """Create a response to replace the hallucinated token."""
         return cls(action=HallucinationAction.REPLACE, replacement_text=text)
-    
+
     @classmethod
     def throw(cls) -> "HallucinationResponse":
         """Create a response to throw an exception."""
         return cls(action=HallucinationAction.THROW)
-    
+
     @classmethod
     def ignore(cls) -> "HallucinationResponse":
         """Create a response to remove the hallucinated token."""
@@ -78,26 +87,34 @@ class HallucinationResponse:
 
 class PIIConfig:
     """Configuration for PII protection with clean decorator API."""
-    
+
     def __init__(
         self,
-        detector: PIIDetector | None,
+        detector: PIIDetector | None = None,
         *,
         batch_detection: bool = True,
         use_name_parsing: bool = True,
         fuzzy_unredaction: bool = False,
-        on_hallucination: Callable[[list[UnredactionIssue]], list[HallucinationResponse]] | None = None,
-        on_gliner_unavailable: Callable[[], None] | None | object = _UNSET,
+        on_hallucination: Callable[
+            [list[UnredactionIssue]], list[HallucinationResponse]
+        ]
+        | None = None,
+        on_gliner_unavailable: Callable[[], None] | None | _UnsetType = _UNSET,
         on_detection: Callable[[list[PIIEntity]], None] | None = None,
-        on_batch_error: Callable[[Exception], None] | None | object = _UNSET,
-        on_unredaction_issue: Callable[[UnredactionIssue], None] | None | object = _UNSET,
-        on_gliner_model_error: Callable[[str, Exception], None] | None | object = _UNSET,
+        on_batch_error: Callable[[Exception], None] | None | _UnsetType = _UNSET,
+        on_unredaction_issue: Callable[[UnredactionIssue], None]
+        | None
+        | _UnsetType = _UNSET,
+        on_gliner_model_error: Callable[[str, Exception], None]
+        | None
+        | _UnsetType = _UNSET,
     ):
         """
         Initialize PII configuration.
-        
+
         Args:
-            detector: PII detector to use
+            detector: PII detector to use. If None, creates a default PresidioDetector
+                     with GLiNER enabled for name detection
             batch_detection: Whether to use batch detection for efficiency
             use_name_parsing: Whether to parse name components
             fuzzy_unredaction: Whether to allow fuzzy matching during unredaction
@@ -122,7 +139,7 @@ class PIIConfig:
                                   Receives model name and exception.
                                   None (default): use warnings.warn
                                   Callable: custom callback
-        
+
         Example:
             ```python
             # Custom logging
@@ -131,19 +148,19 @@ class PIIConfig:
                 on_gliner_unavailable=lambda: logger.warning("GLiNER not available"),
                 on_detection=lambda entities: metrics.record("pii.detected", len(entities)),
                 on_hallucination=lambda issues: [
-                    HallucinationResponse.replace("[REDACTED]") 
-                    if "EMAIL" in issue.token 
+                    HallucinationResponse.replace("[REDACTED]")
+                    if "EMAIL" in issue.token
                     else HallucinationResponse.preserve()
                     for issue in issues
                 ]
             )
-            
+
             # Custom handler to silence warnings
             config = PIIConfig(
                 detector=detector,
                 on_gliner_unavailable=lambda: None  # Don't warn about missing GLiNER
             )
-            
+
             @config.protect
             def process_user(user: User) -> User:
                 # User is automatically protected/unprotected
@@ -151,14 +168,19 @@ class PIIConfig:
             ```
         """
         if detector is None:
-            raise ValueError("detector must be provided to PIIConfig")
-        
+            # Create default PresidioDetector with GLiNER enabled
+            from redactyl.detectors.presidio import PresidioDetector
+            detector = PresidioDetector(
+                use_gliner_for_names=True,
+                language="en",
+            )
+
         self.detector = detector
         self.batch_detection = batch_detection
         self.use_name_parsing = use_name_parsing
         self.fuzzy_unredaction = fuzzy_unredaction
         self.on_hallucination = on_hallucination
-        
+
         # Set default callbacks if not provided (_UNSET means use defaults, None means silence)
         if on_gliner_unavailable is _UNSET:
             # _UNSET (default) means use warnings.warn
@@ -166,7 +188,7 @@ class PIIConfig:
                 "GLiNER is not installed or unavailable. Install with: pip install redactyl[gliner]. "
                 "Falling back to nameparser for name component detection.",
                 UserWarning,
-                stacklevel=3
+                stacklevel=3,
             )
         elif on_gliner_unavailable is None:
             # Explicit None means silence
@@ -174,23 +196,24 @@ class PIIConfig:
         else:
             # Custom callback
             self.on_gliner_unavailable = on_gliner_unavailable
-        
+
         self.on_detection = on_detection
-        
+
         if on_batch_error is _UNSET:
             # _UNSET (default) means use warnings.warn
-            self.on_batch_error = lambda exc: warnings.warn(
-                f"Batch processing error: {exc}",
-                RuntimeWarning,
-                stacklevel=3
-            )
+            def _batch_error_handler(exc: Exception) -> None:
+                warnings.warn(
+                    f"Batch processing error: {exc}", RuntimeWarning, stacklevel=3
+                )
+
+            self.on_batch_error = _batch_error_handler
         elif on_batch_error is None:
             # Explicit None means silence
             self.on_batch_error = None
         else:
             # Custom callback
             self.on_batch_error = on_batch_error
-        
+
         if on_unredaction_issue is _UNSET:
             # Default: do not emit per-issue warnings automatically.
             # Hallucination handling can be configured via on_hallucination.
@@ -201,53 +224,64 @@ class PIIConfig:
         else:
             # Custom callback
             self.on_unredaction_issue = on_unredaction_issue
-        
+
         if on_gliner_model_error is _UNSET:
             # _UNSET (default) means use warnings.warn
-            self.on_gliner_model_error = lambda model, exc: warnings.warn(
-                f"Failed to load GLiNER model '{model}': {exc}. "
-                "Falling back to nameparser for name component detection.",
-                RuntimeWarning,
-                stacklevel=3
-            )
+            def _gliner_model_error_handler(model: str, exc: Exception) -> None:
+                warnings.warn(
+                    f"Failed to load GLiNER model '{model}': {exc}. "
+                    "Falling back to nameparser for name component detection.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+
+            self.on_gliner_model_error = _gliner_model_error_handler
         elif on_gliner_model_error is None:
             # Explicit None means silence
             self.on_gliner_model_error = None
         else:
             # Custom callback
             self.on_gliner_model_error = on_gliner_model_error
-    
-    def protect(self, func: Callable[..., T]) -> Callable[..., T]:
+
+    @overload
+    def protect(self, func: Callable[..., T]) -> Callable[..., T]: ...
+
+    @overload
+    def protect(self, func: Callable[..., Any]) -> Callable[..., Any]: ...
+
+    def protect(self, func: Callable[..., Any]) -> Callable[..., Any]:
         """
         Decorator to automatically protect/unprotect PII in function arguments and returns.
-        
+
         Args:
             func: Function to decorate
-            
+
         Returns:
             Decorated function that handles PII automatically
         """
         # Check if function is async
         is_async = asyncio.iscoroutinefunction(func)
-        
+
         # Get function signature for introspection
         sig = inspect.signature(func)
-        
+
         if is_async:
+
             @functools.wraps(func)
-            async def async_wrapper(*args: Any, **kwargs: Any) -> T:
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 return await self._process_with_protection_async(
                     func, args, kwargs, sig
                 )
+
             return async_wrapper
         else:
+
             @functools.wraps(func)
-            def sync_wrapper(*args: Any, **kwargs: Any) -> T:
-                return self._process_with_protection_sync(
-                    func, args, kwargs, sig
-                )
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return self._process_with_protection_sync(func, args, kwargs, sig)
+
             return sync_wrapper
-    
+
     async def _process_with_protection_async(
         self,
         func: Callable[..., Any],
@@ -257,16 +291,22 @@ class PIIConfig:
     ) -> Any:
         """Process async function call with PII protection."""
         # Create callback context from config
-        from redactyl.callbacks import CallbackContext
-        
         callbacks = CallbackContext(
-            on_gliner_unavailable=self.on_gliner_unavailable,
+            on_gliner_unavailable=self.on_gliner_unavailable
+            if isinstance(self.on_gliner_unavailable, Callable)
+            else None,
             on_detection=self.on_detection,
-            on_batch_error=self.on_batch_error,
-            on_unredaction_issue=self.on_unredaction_issue,
-            on_gliner_model_error=self.on_gliner_model_error,
+            on_batch_error=self.on_batch_error
+            if isinstance(self.on_batch_error, Callable)
+            else None,
+            on_unredaction_issue=self.on_unredaction_issue
+            if isinstance(self.on_unredaction_issue, Callable)
+            else None,
+            on_gliner_model_error=self.on_gliner_model_error
+            if isinstance(self.on_gliner_model_error, Callable)
+            else None,
         )
-        
+
         # Initialize protector
         protector = PydanticPIIProtector(
             detector=self.detector,
@@ -275,42 +315,46 @@ class PIIConfig:
             fuzzy_unredaction=self.fuzzy_unredaction,
             callbacks=callbacks,
         )
-        
+
         # Process arguments
         protected_args: list[Any] = []
         protected_kwargs: dict[str, Any] = {}
         accumulated_state = RedactionState()
-        
+
         # Bind arguments to get parameter names
         bound = sig.bind(*args, **kwargs)
         bound.apply_defaults()
-        
+
         # Collect all BaseModel arguments for batch processing
         model_params: list[BaseModel] = []
-        model_param_info: list[tuple[str, bool]] = []  # Track (param_name, is_kwarg) for each model
-        
+        model_param_info: list[
+            tuple[str, bool]
+        ] = []  # Track (param_name, is_kwarg) for each model
+
         for param_name, param_value in bound.arguments.items():
             if isinstance(param_value, BaseModel):
                 model_params.append(param_value)
                 model_param_info.append((param_name, param_name in bound.kwargs))
-        
+
         # Process all models together if there are multiple
         if len(model_params) > 1:
             # Batch process for consistent tokenization
-            protected_models, accumulated_state = protector.protect_models_batch(model_params)
-            
+            protected_models, accumulated_state = protector.protect_models_batch(
+                model_params
+            )
+
             # Map protected models back to their parameter positions
             model_idx = 0
             for param_name, param_value in bound.arguments.items():
                 if isinstance(param_value, BaseModel):
                     protected_model = protected_models[model_idx]
                     param_name, is_kwarg = model_param_info[model_idx]
-                    
+
                     if is_kwarg:
                         protected_kwargs[param_name] = protected_model
                     else:
                         protected_args.append(protected_model)
-                    
+
                     model_idx += 1
                 else:
                     # Pass through non-model arguments
@@ -324,13 +368,13 @@ class PIIConfig:
                 if isinstance(param_value, BaseModel):
                     # Protect this model
                     protected_model, state = protector.protect_model(param_value)
-                    
+
                     # Store protected version
                     if param_name in bound.kwargs:
                         protected_kwargs[param_name] = protected_model
                     else:
                         protected_args.append(protected_model)
-                    
+
                     # Accumulate state
                     accumulated_state = accumulated_state.merge(state)
                 else:
@@ -339,17 +383,17 @@ class PIIConfig:
                         protected_kwargs[param_name] = param_value
                     else:
                         protected_args.append(param_value)
-        
+
         # Call the async function with protected arguments
         result = await func(*protected_args, **protected_kwargs)
-        
+
         # Process return value
         if isinstance(result, BaseModel):
             # Unprotect the result
             unprotected_result, issues = protector.unprotect_model(
                 result, accumulated_state
             )
-            
+
             # Handle hallucination issues if callback provided
             if issues and self.on_hallucination:
                 responses = self.on_hallucination(issues)
@@ -358,7 +402,9 @@ class PIIConfig:
                 )
             elif issues:
                 # Default behavior: warn unless explicitly silenced
-                if self.on_unredaction_issue is not None:
+                if self.on_unredaction_issue is not None and callable(
+                    self.on_unredaction_issue
+                ):
                     for issue in issues:
                         self.on_unredaction_issue(issue)
                 else:
@@ -369,11 +415,11 @@ class PIIConfig:
                             UserWarning,
                             stacklevel=3,
                         )
-            
+
             return unprotected_result
         else:
             return result
-    
+
     def _process_with_protection_sync(
         self,
         func: Callable[..., Any],
@@ -383,16 +429,22 @@ class PIIConfig:
     ) -> Any:
         """Process sync function call with PII protection."""
         # Create callback context from config
-        from redactyl.callbacks import CallbackContext
-        
         callbacks = CallbackContext(
-            on_gliner_unavailable=self.on_gliner_unavailable,
+            on_gliner_unavailable=self.on_gliner_unavailable
+            if isinstance(self.on_gliner_unavailable, Callable)
+            else None,
             on_detection=self.on_detection,
-            on_batch_error=self.on_batch_error,
-            on_unredaction_issue=self.on_unredaction_issue,
-            on_gliner_model_error=self.on_gliner_model_error,
+            on_batch_error=self.on_batch_error
+            if isinstance(self.on_batch_error, Callable)
+            else None,
+            on_unredaction_issue=self.on_unredaction_issue
+            if isinstance(self.on_unredaction_issue, Callable)
+            else None,
+            on_gliner_model_error=self.on_gliner_model_error
+            if isinstance(self.on_gliner_model_error, Callable)
+            else None,
         )
-        
+
         # Initialize protector
         protector = PydanticPIIProtector(
             detector=self.detector,
@@ -401,42 +453,46 @@ class PIIConfig:
             fuzzy_unredaction=self.fuzzy_unredaction,
             callbacks=callbacks,
         )
-        
+
         # Process arguments
         protected_args: list[Any] = []
         protected_kwargs: dict[str, Any] = {}
         accumulated_state = RedactionState()
-        
+
         # Bind arguments to get parameter names
         bound = sig.bind(*args, **kwargs)
         bound.apply_defaults()
-        
+
         # Collect all BaseModel arguments for batch processing
         model_params: list[BaseModel] = []
-        model_param_info: list[tuple[str, bool]] = []  # Track (param_name, is_kwarg) for each model
-        
+        model_param_info: list[
+            tuple[str, bool]
+        ] = []  # Track (param_name, is_kwarg) for each model
+
         for param_name, param_value in bound.arguments.items():
             if isinstance(param_value, BaseModel):
                 model_params.append(param_value)
                 model_param_info.append((param_name, param_name in bound.kwargs))
-        
+
         # Process all models together if there are multiple
         if len(model_params) > 1:
             # Batch process for consistent tokenization
-            protected_models, accumulated_state = protector.protect_models_batch(model_params)
-            
+            protected_models, accumulated_state = protector.protect_models_batch(
+                model_params
+            )
+
             # Map protected models back to their parameter positions
             model_idx = 0
             for param_name, param_value in bound.arguments.items():
                 if isinstance(param_value, BaseModel):
                     protected_model = protected_models[model_idx]
                     param_name, is_kwarg = model_param_info[model_idx]
-                    
+
                     if is_kwarg:
                         protected_kwargs[param_name] = protected_model
                     else:
                         protected_args.append(protected_model)
-                    
+
                     model_idx += 1
                 else:
                     # Pass through non-model arguments
@@ -450,13 +506,13 @@ class PIIConfig:
                 if isinstance(param_value, BaseModel):
                     # Protect this model
                     protected_model, state = protector.protect_model(param_value)
-                    
+
                     # Store protected version
                     if param_name in bound.kwargs:
                         protected_kwargs[param_name] = protected_model
                     else:
                         protected_args.append(protected_model)
-                    
+
                     # Accumulate state
                     accumulated_state = accumulated_state.merge(state)
                 else:
@@ -465,17 +521,17 @@ class PIIConfig:
                         protected_kwargs[param_name] = param_value
                     else:
                         protected_args.append(param_value)
-        
+
         # Call the sync function with protected arguments
         result = func(*protected_args, **protected_kwargs)
-        
+
         # Process return value
         if isinstance(result, BaseModel):
             # Unprotect the result
             unprotected_result, issues = protector.unprotect_model(
                 result, accumulated_state
             )
-            
+
             # Handle hallucination issues if callback provided
             if issues and self.on_hallucination:
                 responses = self.on_hallucination(issues)
@@ -484,7 +540,9 @@ class PIIConfig:
                 )
             elif issues:
                 # Default behavior: warn unless explicitly silenced
-                if self.on_unredaction_issue is not None:
+                if self.on_unredaction_issue is not None and callable(
+                    self.on_unredaction_issue
+                ):
                     for issue in issues:
                         self.on_unredaction_issue(issue)
                 else:
@@ -495,11 +553,11 @@ class PIIConfig:
                             UserWarning,
                             stacklevel=3,
                         )
-            
+
             return unprotected_result
         else:
             return result
-    
+
     def _apply_hallucination_responses(
         self,
         model: BaseModel,
@@ -508,18 +566,18 @@ class PIIConfig:
     ) -> BaseModel:
         """
         Apply hallucination responses to a model.
-        
+
         Processes the responses and applies replacements to the model.
         """
         if len(issues) != len(responses):
             raise ValueError(
                 f"Mismatch between issues ({len(issues)}) and responses ({len(responses)})"
             )
-        
+
         # Collect replacements to make
         replacements: dict[str, str | None] = {}
-        
-        for issue, response in zip(issues, responses):
+
+        for issue, response in zip(issues, responses, strict=False):
             if response.action == HallucinationAction.THROW:
                 # Throw exception immediately
                 raise HallucinationError([issue])
@@ -532,31 +590,30 @@ class PIIConfig:
             elif response.action == HallucinationAction.IGNORE:
                 # Remove the token (replace with empty string)
                 replacements[issue.token] = ""
-        
+
         if not replacements:
             # No changes needed
             return model
-        
+
         # Apply replacements to all string fields in the model
         model_dict = model.model_dump()
         self._apply_replacements_to_dict(model_dict, replacements)
-        
+
         # Create new model with replacements applied
         return model.__class__.model_validate(model_dict)
-    
+
     def _apply_replacements_to_dict(
-        self,
-        data: Any,
-        replacements: dict[str, str | None]
+        self, data: Any, replacements: dict[str, str | None]
     ) -> None:
         """
         Recursively apply string replacements to a dictionary.
-        
+
         Modifies the dictionary in place.
         """
         if isinstance(data, dict):
             # Recurse into dictionary
-            for key, value in data.items():
+            data_dict: dict[Any, Any] = data  # type: ignore[reportUnknownVariableType]
+            for key, value in data_dict.items():
                 if isinstance(value, str):
                     # Apply replacements
                     new_value = value
@@ -568,7 +625,8 @@ class PIIConfig:
                     self._apply_replacements_to_dict(value, replacements)
         elif isinstance(data, list):
             # Recurse into list
-            for i, item in enumerate(data):
+            data_list: list[Any] = data  # type: ignore[reportUnknownVariableType]
+            for i, item in enumerate(data_list):
                 if isinstance(item, str):
                     # Apply replacements
                     new_value = item
@@ -654,23 +712,24 @@ class PydanticPIIProtector:
         self.batch_detection = batch_detection
         self.use_name_parsing = use_name_parsing
         self.fuzzy_unredaction = fuzzy_unredaction
-        
+
         if callbacks is None:
-            from redactyl.callbacks import CallbackContext
             callbacks = CallbackContext.with_defaults()
         self.callbacks = callbacks
 
         # Initialize components with callbacks
         self.redactyl = PIILoop(detector, callbacks=callbacks)
         self.batch_detector = BatchDetector(
-            detector, use_position_tracking=True, use_name_parsing=use_name_parsing,
-            callbacks=callbacks
+            detector,
+            use_position_tracking=True,
+            use_name_parsing=use_name_parsing,
+            callbacks=callbacks,
         )
         self.entity_tracker = GlobalEntityTracker()
 
-    def protect_model(
-        self, model: BaseModel, path_prefix: str = ""
-    ) -> tuple[BaseModel, RedactionState]:
+    def protect_model[M: BaseModel](
+        self, model: M, path_prefix: str = ""
+    ) -> tuple[M, RedactionState]:
         """
         Redact PII in a Pydantic model.
 
@@ -700,9 +759,9 @@ class PydanticPIIProtector:
 
         return protected_model, state
 
-    def protect_models_batch(
-        self, models: list[BaseModel]
-    ) -> tuple[list[BaseModel], RedactionState]:
+    def protect_models_batch[M: BaseModel](
+        self, models: list[M]
+    ) -> tuple[list[M], RedactionState]:
         """
         Protect multiple models in a single batch for consistent tokenization.
 
@@ -736,7 +795,7 @@ class PydanticPIIProtector:
         tokens_by_field = self.entity_tracker.assign_tokens(entities_by_field)
 
         # Build protected models and accumulate state
-        protected_models: list[BaseModel] = []
+        protected_models: list[M] = []
         accumulated_state = RedactionState()
 
         for idx, model in enumerate(models):
@@ -791,9 +850,9 @@ class PydanticPIIProtector:
 
         return protected_models, accumulated_state
 
-    def unprotect_model(
-        self, model: BaseModel, state: RedactionState, path_prefix: str = ""
-    ) -> tuple[BaseModel, list[UnredactionIssue]]:
+    def unprotect_model[M: BaseModel](
+        self, model: M, state: RedactionState, path_prefix: str = ""
+    ) -> tuple[M, list[UnredactionIssue]]:
         """
         Unredact PII in a Pydantic model.
 
@@ -852,7 +911,7 @@ class PydanticPIIProtector:
                     if isinstance(meta, PIIFieldConfig) and not meta.detect:
                         skip_field = True
                         break
-            
+
             if skip_field:
                 # Skip this field entirely
                 continue
@@ -912,10 +971,14 @@ class PydanticPIIProtector:
             # Apply redactions to this field
             redacted_text = field_value
             field_tokens = tokens_by_field[field_path]
+            
+            # Filter overlapping tokens before applying redactions
+            # This prevents issues like EMAIL overlapping with URL parts
+            filtered_tokens = self._filter_overlapping_tokens(field_tokens)
 
             # Sort tokens by position (reverse order for replacement)
             sorted_tokens = sorted(
-                field_tokens, key=lambda t: t.entity.start, reverse=True
+                filtered_tokens, key=lambda t: t.entity.start, reverse=True
             )
 
             for token in sorted_tokens:
@@ -954,9 +1017,9 @@ class PydanticPIIProtector:
 
         return protected_fields, accumulated_state
 
-    def _apply_protected_data(
-        self, model: BaseModel, protected_data: dict[str, str], path_prefix: str = ""
-    ) -> BaseModel:
+    def _apply_protected_data[M: BaseModel](
+        self, model: M, protected_data: dict[str, str], path_prefix: str = ""
+    ) -> M:
         """
         Create a new model with protected data applied.
 
@@ -1014,3 +1077,37 @@ class PydanticPIIProtector:
             for key in keys[:-1]:
                 data = data[key]
             data[keys[-1]] = value
+    
+    def _filter_overlapping_tokens(
+        self, tokens: list[RedactionToken]
+    ) -> list[RedactionToken]:
+        """Filter overlapping tokens, preferring longer and more confident entities.
+        
+        This prevents issues like EMAIL overlapping with URL parts when processing
+        entities like 'john.smith@example.com' which may be detected as both
+        EMAIL and multiple URL fragments.
+        """
+        if not tokens:
+            return []
+        
+        # Sort by start position, then by length (descending), then by confidence (descending)
+        # This prefers longer, more specific entities over shorter ones
+        sorted_tokens = sorted(
+            tokens, 
+            key=lambda t: (
+                t.entity.start, 
+                -(t.entity.end - t.entity.start), 
+                -t.entity.confidence
+            )
+        )
+        
+        filtered: list[RedactionToken] = []
+        last_end = -1
+        
+        for token in sorted_tokens:
+            # Skip if this token overlaps with a previously selected one
+            if token.entity.start >= last_end:
+                filtered.append(token)
+                last_end = token.entity.end
+        
+        return filtered

@@ -80,9 +80,11 @@ class GlobalEntityTracker:
         unique_entities: list[PIIEntity] = []
         seen_values: dict[tuple[PIIType, str], PIIEntity] = {}
 
-        # Collect all entities
+        # Collect all entities, sorting fields by depth (top-level first)
         all_entities: list[tuple[str, PIIEntity]] = []
-        for field_path, entities in entities_by_field.items():
+        sorted_fields = sorted(entities_by_field.keys(), key=lambda x: (x.count('.'), x))
+        for field_path in sorted_fields:
+            entities = entities_by_field[field_path]
             for entity in entities:
                 all_entities.append((field_path, entity))
 
@@ -172,10 +174,9 @@ class GlobalEntityTracker:
         """Create redaction tokens for unique entities.
 
         Non-name entities are numbered per type. Name-related entities
-        (PERSON/NAME_*) are numbered together based on alphabetical order
-        of their values so components from the same context receive
-        consistent, stable indices across types. This matches integration
-        expectations like: "Dr. Sarah Johnson" → Title=1, Last=2, First=3.
+        (PERSON/NAME_*) are numbered together based on document order
+        of their first appearance so components receive
+        consistent indices across types preserving the reading order.
         """
         entity_to_token: dict[PIIEntity, RedactionToken] = {}
 
@@ -187,32 +188,32 @@ class GlobalEntityTracker:
             PIIType.NAME_TITLE,
         }
 
-        name_entities: list[PIIEntity] = []
-        non_name_by_type: dict[PIIType, list[PIIEntity]] = {}
+        # Group entities by type for separate numbering
+        entities_by_type: dict[PIIType, list[PIIEntity]] = {}
 
         for entity in entities:
-            if entity.type in name_types:
-                name_entities.append(entity)
-            else:
-                non_name_by_type.setdefault(entity.type, []).append(entity)
+            entities_by_type.setdefault(entity.type, []).append(entity)
 
-        # Assign indices for name-related entities across all name types
-        if name_entities:
-            # Use unique normalized values to ensure the same value across types
-            # shares the same index (e.g., "Jane" as first/last in odd cases).
+        # Process name types with separate counters for each subtype
+        for pii_type in name_types:
+            if pii_type not in entities_by_type:
+                continue
+                
+            type_entities = entities_by_type[pii_type]
+            
+            # Build ordering based on unique values in document order
             def norm(e: PIIEntity) -> str:
                 return e.value.strip().lower()
-
-            # Build ordering based on unique values
+            
             unique_values: list[str] = []
-            for e in sorted(name_entities, key=lambda e: e.value):
+            for e in type_entities:  # Keep original order from deduplication
                 v = norm(e)
                 if v not in unique_values:
                     unique_values.append(v)
-
+            
             value_to_index = {v: i + 1 for i, v in enumerate(unique_values)}
-
-            for e in name_entities:
+            
+            for e in type_entities:
                 idx = value_to_index[norm(e)]
                 entity_to_token[e] = RedactionToken(
                     original=e.value,
@@ -222,7 +223,9 @@ class GlobalEntityTracker:
                 )
 
         # Assign tokens with consistent numbering per non-name type
-        for _, type_entities in non_name_by_type.items():
+        for pii_type, type_entities in entities_by_type.items():
+            if pii_type in name_types:
+                continue  # Already processed above
             # Sort by value for consistent ordering
             sorted_entities = sorted(type_entities, key=lambda e: e.value)
 

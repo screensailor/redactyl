@@ -4,7 +4,7 @@
 
 ## Why redactyl?
 
-When using AI language models (LLMs) like ChatGPT or Claude in production, you need to protect sensitive information. Traditional approaches either block PII entirely (losing context) or use fake data that gets mangled by the AI. 
+When using AI language models (LLMs) in production, you need to protect sensitive information. Traditional approaches either block PII entirely (losing context) or use fake data that gets mangled by the AI. 
 
 `redactyl` solves this with a token-based approach that:
 - **Preserves context** - AI sees the structure and meaning, not the sensitive data
@@ -22,6 +22,7 @@ When using AI language models (LLMs) like ChatGPT or Claude in production, you n
 - 🎨 **Pydantic integration** - Decorator-based API for structured data
 - 🔄 **Session management** - Accumulate state across conversation turns
 - 📊 **Event callbacks** - Hook into the processing pipeline for logging and metrics
+- 🚀 **Zero-config setup** - `PIIConfig()` works out of the box with sensible defaults (v0.1.2+)
 - 🌐 **Production ready** - Used in production systems processing millions of tokens
 
 ## Table of Contents
@@ -67,12 +68,31 @@ python -m spacy download en_core_web_sm
 ## Quick Start
 
 ```python
-from pii_loop import Redactyl
-from pii_loop.detectors.presidio import PresidioDetector
+from redactyl.pydantic_integration import PIIConfig
+
+# Simple initialization with sensible defaults (v0.1.2+)
+pii = PIIConfig()
+
+@pii.protect
+def process_text(text: str) -> str:
+    # Text is automatically redacted before processing
+    # and unredacted before return
+    return f"Processed: {text}"
+
+# Example usage
+result = process_text("Contact John at john@example.com")
+print(result)  # Original PII is preserved
+```
+
+Or using the lower-level API:
+
+```python
+from redactyl.core import PIILoop
+from redactyl.detectors.presidio import PresidioDetector
 
 # Initialize and redact
 detector = PresidioDetector()
-loop = Redactyl(detector)
+loop = PIILoop(detector)
 
 text = "Contact John at john@example.com"
 redacted, state = loop.redact(text)
@@ -112,15 +132,15 @@ Example: "Email john@example.com" → "Email [EMAIL_1]" → AI responds → Orig
 ### Basic Usage
 
 ```python
-from pii_loop import Redactyl
-from pii_loop.detectors.presidio import PresidioDetector
+from redactyl.core import PIILoop
+from redactyl.detectors.presidio import PresidioDetector
 
 # Initialize with Presidio detector
 detector = PresidioDetector(
     use_gliner_for_names=True,  # Enable GLiNER name parsing
     language="en"  # Language for detection
 )
-loop = Redactyl(detector=detector, use_name_parsing=True)
+loop = PIILoop(detector=detector, use_name_parsing=True)
 
 # Redact PII
 text = "Contact John Smith at john@example.com"
@@ -140,9 +160,12 @@ print(unredacted)  # "I'll email john@example.com about John's request"
 The library intelligently parses names into components using ML (GLiNER) or rule-based parsing:
 
 ```python
+from redactyl.core import PIILoop
+from redactyl.detectors.presidio import PresidioDetector
+
 # Initialize with name parsing
 detector = PresidioDetector(use_gliner_for_names=True)
-loop = Redactyl(detector=detector, use_name_parsing=True)
+loop = PIILoop(detector=detector, use_name_parsing=True)
 
 # Complex name example
 text = "Dr. Sarah Jane Johnson will meet Prof. John Smith"
@@ -161,8 +184,8 @@ redacted, state = loop.redact(text)
 ```python
 from typing import Annotated
 from pydantic import BaseModel
-from pii_loop.pydantic_integration import PIIConfig, pii_field
-from pii_loop.types import PIIType
+from redactyl.pydantic_integration import PIIConfig, pii_field
+from redactyl.types import PIIType
 
 class CustomerEmail(BaseModel):
     sender_name: Annotated[str, pii_field(PIIType.PERSON, parse_components=True)]
@@ -195,9 +218,9 @@ The callback pattern allows you to hook into the PII processing pipeline for log
 #### Example: Custom Logging and Metrics
 
 ```python
-from pii_loop import Redactyl
-from pii_loop.pydantic_integration import PIIConfig
-from pii_loop.types import PIIEntity
+from redactyl.core import PIILoop
+from redactyl.pydantic_integration import PIIConfig
+from redactyl.types import PIIEntity
 import logging
 
 logger = logging.getLogger(__name__)
@@ -234,7 +257,7 @@ config = PIIConfig(
     on_batch_error=lambda exc: logger.error(f"Batch error: {exc}")
 )
 
-loop = Redactyl.from_config(config)
+loop = PIILoop.from_config(config)
 ```
 
 #### Example: Silencing Warnings
@@ -251,7 +274,7 @@ config = PIIConfig(
 #### Example: Hallucination Handling
 
 ```python
-from pii_loop.handlers import HallucinationResponse
+from redactyl.handlers import HallucinationResponse
 
 def handle_hallucinations(issues: list[UnredactionIssue]) -> list[HallucinationResponse]:
     """Custom logic for handling hallucinated tokens."""
@@ -309,7 +332,7 @@ config = PIIConfig(
 ### Batch Processing
 
 ```python
-from pii_loop.batch import BatchDetector
+from redactyl.batch import BatchDetector
 
 batch_detector = BatchDetector(
     detector=detector,
@@ -331,7 +354,7 @@ entities_by_field = batch_detector.detect_batch(fields)
 ### Session Management
 
 ```python
-from pii_loop.session import PIISession
+from redactyl.session import PIISession
 
 with PIISession(loop) as session:
     # Turn 1
@@ -355,7 +378,7 @@ with PIISession(loop) as session:
 LLMs sometimes create tokens that weren't in the original text. The library handles this gracefully:
 
 ```python
-from pii_loop.handlers import HallucinationHandler, HallucinationResponse
+from redactyl.handlers import HallucinationHandler, HallucinationResponse
 
 # Example: LLM creates a token that doesn't exist
 text = "Contact John about the project"
@@ -378,7 +401,7 @@ unredacted, issues = loop.unredact(
 )
 
 # Or use the DefaultHallucinationHandler for programmatic control
-from pii_loop.handlers import DefaultHallucinationHandler
+from redactyl.handlers import DefaultHallucinationHandler
 handler = DefaultHallucinationHandler()
 unredacted = handler.handle(llm_response, state, issues)
 ```
@@ -409,7 +432,7 @@ PII (Personal Identifiable Information) types that can be detected:
 ### Detector Options
 
 ```python
-from pii_loop.detectors.presidio import PresidioDetector
+from redactyl.detectors.presidio import PresidioDetector
 
 detector = PresidioDetector(
     # Core settings
@@ -570,6 +593,39 @@ uv run ruff check --fix
 uv run ruff format
 uv run pytest
 ```
+
+## Changelog
+
+### v0.1.2 (2025-01-12)
+
+#### New Features
+- **Default PIIConfig**: `PIIConfig()` now works with sensible defaults - automatically creates a PresidioDetector with GLiNER enabled
+- **Improved Entity Tracking**: Names and entities are now numbered by document order (reading order) instead of alphabetically, making token indices more intuitive
+- **GLiNER Model Caching**: GLiNER models are now cached globally, preventing repeated downloads and significantly speeding up test runs
+
+#### Bug Fixes
+- Fixed entity tracking to use document order instead of alphabetical order for token numbering
+- Fixed overlapping entity detection in batch mode (e.g., EMAIL overlapping with URL)
+- Fixed field processing order to ensure consistent token numbering across nested models
+
+#### Internal Improvements
+- Added session-scoped pytest fixtures for better test performance
+- Improved test isolation for GLiNER availability testing
+- Better handling of name component parsing edge cases
+
+### v0.1.1 (2025-01-05)
+- Fixed critical bugs in entity tracking
+- Improved name component grouping
+- Better handling of partial name references
+
+### v0.1.0 (2025-01-01)
+- Initial release
+- Core PII redaction and unredaction functionality
+- Pydantic integration with decorator API
+- Name component parsing with GLiNER support
+- Batch processing capabilities
+- Session management for conversations
+- Comprehensive error handling
 
 ## License
 

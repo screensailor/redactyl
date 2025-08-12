@@ -125,19 +125,31 @@ class TestGLiNEROptional(unittest.TestCase):
             if "gliner" in sys.modules:
                 del sys.modules["gliner"]
             
-            from redactyl.detectors.gliner_parser import GlinerNameParser
+            # Also patch the module-level GLiNER variable
+            import redactyl.detectors.gliner_parser as gliner_module
+            original_gliner = gliner_module.GLiNER
+            gliner_module.GLiNER = None
             
-            with warnings.catch_warnings(record=True):
-                warnings.simplefilter("always")
-                parser = GlinerNameParser()
+            # Clear the cache to ensure fresh initialization
+            gliner_module._clear_gliner_cache()
+            
+            try:
+                from redactyl.detectors.gliner_parser import GlinerNameParser
                 
-                # Check availability
-                self.assertFalse(parser.is_available)
+                with warnings.catch_warnings(record=True):
+                    warnings.simplefilter("always")
+                    parser = GlinerNameParser()
                 
-                # Test parse_single_name with unavailable GLiNER
-                result = parser.parse_single_name("John Doe")
-                expected = {"title": "", "first": "", "middle": "", "last": ""}
-                self.assertEqual(result, expected)
+                    # Check availability
+                    self.assertFalse(parser.is_available)
+                    
+                    # Test parse_single_name with unavailable GLiNER
+                    result = parser.parse_single_name("John Doe")
+                    expected = {"title": "", "first": "", "middle": "", "last": ""}
+                    self.assertEqual(result, expected)
+            finally:
+                # Restore the original GLiNER
+                gliner_module.GLiNER = original_gliner
 
 
 @pytest.mark.skipif(
