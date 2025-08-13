@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. This project adheres to semantic versioning.
 
+## v0.2.1 — 2025-08-13
+
+- Fixed: Critical streaming bug where generators were yielding redacted tokens instead of unredacted values.
+- Improved: Clearer membrane principle - `@pii.protect` acts as a two-way membrane that redacts on entry and unredacts on exit.
+- Fixed: Token collision between input arguments and yielded values in generators.
+- Improved: Streaming state tracking now separately tracks observed tokens for persistence while using input-only state for unredaction.
+
 ## v0.2.0 — 2025-08-13
 
 - New: Container traversal for `list`, `dict`, `set`, `tuple`, and `frozenset` (inputs and return values).

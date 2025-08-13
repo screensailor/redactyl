@@ -1,7 +1,6 @@
 """Test the @pii.protect decorator with streaming generator functions."""
 
 import asyncio
-import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -45,108 +44,80 @@ async def stream(
     input: Input,
 ) -> AsyncGenerator[StreamingResponse, Any]:
     """Streaming function that yields responses with PII."""
+    # Inside the function, input.text contains tokens like [NAME_FIRST_1] [EMAIL_1]
+    # We can:
+    # 1. Reference these tokens in our yields (they'll be unredacted)
+    # 2. Introduce new hardcoded values
     await asyncio.sleep(0.01)
+    
+    # Yield response that references input tokens
     yield StreamingResponse(
-        part1=Part1(text="Hello, I'm Jane Doe from New York.")
+        part1=Part1(text=f"Processing request from [NAME_FIRST_1] [NAME_LAST_1]")
     )
     await asyncio.sleep(0.01)
+    
+    # Yield response with mixed content
     yield StreamingResponse(
-        part2=Part2(text="You can reach me at jane.doe@example.com")
+        part2=Part2(text=f"Will respond to [EMAIL_1] (via our Jane Doe handler)")
     )
+    
     await asyncio.sleep(0.01)
+    # Echo the input back
     yield StreamingResponse(
         done=True,
         complete=Complete(
-            input=input,
-            part1=Part1(text="Hello, I'm Jane Doe from New York."),
-            part2=Part2(text="You can reach me at jane.doe@example.com"),
+            input=input,  # This will be unredacted when yielded
+            part1=Part1(text=f"Processing request from [NAME_FIRST_1] [NAME_LAST_1]"),
+            part2=Part2(text=f"Will respond to [EMAIL_1]"),
         ),
     )
 
 
 @pytest.mark.asyncio
 async def test_streaming_decorator():
-    """Test that the decorator handles streaming functions correctly."""
+    """Streaming yields are unredacted to the caller while internal state is maintained."""
     # Input with PII
     user_input = Input(text="My name is John Smith and my email is john@example.com")
-    
+
     # Collect all responses
     responses = []
     async for response in stream(user_input):
         responses.append(response)
-    
+
     # Verify we got 3 responses
     assert len(responses) == 3
-    
-    # Check first response (part1)
+
+    # Check first response (part1) - tokens are unredacted to input values
     assert responses[0].part1 is not None
-    assert "Jane Doe" not in responses[0].part1.text
-    # With name parsing enabled, we get NAME_FIRST and NAME_LAST instead of PERSON
-    assert ("[NAME_FIRST_" in responses[0].part1.text or "[PERSON_" in responses[0].part1.text)
-    assert ("[NAME_LAST_" in responses[0].part1.text or "[PERSON_" in responses[0].part1.text)
-    assert "New York" not in responses[0].part1.text
-    assert "[LOCATION_" in responses[0].part1.text
-    
-    # Check second response (part2)
+    assert "John Smith" in responses[0].part1.text  # [NAME_FIRST_1] [NAME_LAST_1] → John Smith
+
+    # Check second response (part2) - mixed content
     assert responses[1].part2 is not None
-    assert "jane.doe@example.com" not in responses[1].part2.text
-    assert "[EMAIL_" in responses[1].part2.text
-    
+    assert "john@example.com" in responses[1].part2.text  # [EMAIL_1] → john@example.com
+    assert "Jane Doe" in responses[1].part2.text  # Hardcoded value passes through
+
     # Check final response with complete data
     assert responses[2].done is True
     assert responses[2].complete is not None
-    
-    # Verify input was protected when passed to the function
-    # The generator receives protected input and echoes it back
-    assert responses[2].complete.input.text != user_input.text
-    assert "John Smith" not in responses[2].complete.input.text
-    assert "[NAME_FIRST_" in responses[2].complete.input.text
-    assert "[NAME_LAST_" in responses[2].complete.input.text
-    assert "john@example.com" not in responses[2].complete.input.text
-    assert "[EMAIL_" in responses[2].complete.input.text
-    
-    # Verify part1 in complete
-    assert "Jane Doe" not in responses[2].complete.part1.text
-    assert ("[NAME_FIRST_" in responses[2].complete.part1.text or "[PERSON_" in responses[2].complete.part1.text)
-    
-    # Verify part2 in complete
-    assert "jane.doe@example.com" not in responses[2].complete.part2.text
-    assert "[EMAIL_" in responses[2].complete.part2.text
+
+    # The input should be unredacted back to original values
+    assert responses[2].complete.input.text == user_input.text
+    # And other parts show tokens are properly unredacted
+    assert "John Smith" in responses[2].complete.part1.text
+    assert "john@example.com" in responses[2].complete.part2.text
 
 
 @pytest.mark.asyncio
 async def test_streaming_consistent_tokens():
-    """Test that tokens remain consistent across multiple yields."""
+    """Sanity check that streaming still works and yields unredacted values."""
     user_input = Input(text="Contact Alice Brown at alice@example.com")
-    
+
     responses = []
     async for response in stream(user_input):
         responses.append(response)
-    
-    # If the same entity appears in multiple yields, it should have the same token
-    # In this case, we're checking that entities are consistently tokenized
-    
-    # Extract tokens from responses
-    tokens_in_part1 = []
-    tokens_in_part2 = []
-    tokens_in_complete = []
-    
-    if responses[0].part1:
-        text = responses[0].part1.text
-        # Find all tokens (simple pattern matching)
-        tokens_in_part1 = re.findall(r'\[[\w_]+_\d+\]', text)
-    
-    if responses[1].part2:
-        text = responses[1].part2.text
-        tokens_in_part2 = re.findall(r'\[[\w_]+_\d+\]', text)
-    
-    if responses[2].complete:
-        text1 = responses[2].complete.part1.text
-        text2 = responses[2].complete.part2.text
-        tokens_in_complete.extend(re.findall(r'\[[\w_]+_\d+\]', text1))
-        tokens_in_complete.extend(re.findall(r'\[[\w_]+_\d+\]', text2))
-    
-    # Verify tokens are present
-    assert len(tokens_in_part1) > 0
-    assert len(tokens_in_part2) > 0
-    assert len(tokens_in_complete) > 0
+
+    # Verify unredacted values are visible outside the bubble
+    # The generator yields text with tokens that get unredacted to the original input values
+    assert any("Alice Brown" in r.part1.text for r in responses if r.part1)
+    assert any("alice@example.com" in r.part2.text for r in responses if r.part2)
+    assert any("Jane Doe" in r.part2.text for r in responses if r.part2)  # Hardcoded value

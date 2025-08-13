@@ -4,6 +4,12 @@ Type-safe, reversible PII protection for LLM apps — now centered around the `@
 
 Redactyl replaces sensitive values with stable tokens (for example: `[EMAIL_1]`, `[NAME_FIRST_1]`) before your code talks to an LLM, and restores originals when results come back. It works across Pydantic models, nested containers, sync/async functions, and streams — automatically.
 
+**PII Membrane (“protect” bubble)**
+- Inside decorated functions: arguments are redacted; your code and LLMs see tokens.
+- Outside: return values and stream yields are unredacted; callers see originals.
+- Two-way membrane: redacts on entry, unredacts on exit.
+- Mapping source of truth: only incoming arguments build the redaction map; outputs are unredacted using that map.
+
 Warning: You need a spaCy model installed (see Installation). Optional GLiNER improves name component detection.
 
 ## Why Redactyl?
@@ -16,7 +22,7 @@ Warning: You need a spaCy model installed (see Installation). Optional GLiNER im
 
 ### Quickstart (Plain String)
 
-Use `@pii.protect` on ordinary functions too — no Pydantic required.
+Use `@pii.protect` on ordinary functions too — no Pydantic required. Decorated functions are transparent to callers: from the outside you can’t tell PII protection is happening.
 
 ```python
 from redactyl.pydantic_integration import PIIConfig
@@ -29,7 +35,7 @@ def summarize(text: str) -> str:
     return f"Processed: {text}"
 
 print(summarize("Email me at john@example.com"))
-# → "Processed: Email me at john@example.com" (restored on return)
+# → "Processed: Email me at john@example.com" (unredacted on return)
 ```
 
 ## The `@pii.protect` Moment
@@ -76,6 +82,7 @@ print(text)  # → "Hi John, … I'll email john@example.com"
 Why this feels essential:
 - Minimal change: add a decorator; keep your LLM calls.
 - Smart defaults: auto-detects sync/async/generator functions and Pydantic arguments.
+- Transparent: callers see originals; tokens exist only inside the bubble.
 - Reversible: tokens round-trip perfectly; originals are restored for outputs.
 
 Name intelligence:
@@ -108,9 +115,9 @@ result = handle(Message(user="Jane Roe", email="jane@x.com", text="Hello"))
 print(result)  # Unredacted output
 ```
 
-### 2) Streaming: Accumulate State Automatically
+### 2) Streaming: Transparent Membrane
 
-Redactyl keeps a running redaction state across stream yields and surfaces it when the stream ends.
+Decorated generators work like a two-way membrane: inputs are redacted on entry and every yielded item is unredacted on exit. Consumers of the stream never see tokens — only original values.
 
 ```python
 from collections.abc import AsyncIterator
@@ -122,29 +129,34 @@ class In(BaseModel):
 class Out(BaseModel):
     content: str
 
+# Optional: observe state after a stream completes (for persistence/debugging)
 captured_state = None
-pii = PIIConfig(on_stream_complete=lambda st: globals().update(captured_state=st))
+pii = PIIConfig(on_stream_complete=lambda st: globals().__setitem__("captured_state", st))
 
 @pii.protect
 async def chat_stream(message: In) -> AsyncIterator[Out]:
-    # message.content is redacted here
+    # Inside: message.content is redacted (e.g., john@example.com → [EMAIL_1])
     async for chunk in llm.stream(message.content):
-        # Each yielded model is protected before it leaves the function
+        # The LLM sees tokens and may emit them in its text
+        # On exit, the decorator unredacts using the input-based map
         yield Out(content=chunk)
 
-# Consume the stream as usual (receives protected chunks)
+# Consumers get unredacted values; tokens never leak outside the bubble
 async for part in chat_stream(In(content="Email me at john@example.com")):
-    send_to_client(part)  # shows tokens like [EMAIL_1]
-
-# After the stream finishes, captured_state holds the RedactionState
-# Later: unredact any persisted transcript with that state
-from redactyl.core import PIILoop
-original, _ = PIILoop(pii.detector).unredact("I'll email [EMAIL_1]", captured_state)
+    print(part.content)  # e.g., "Thanks, I’ll email john@example.com"
 ```
 
 Notes:
-- Works with async generators and sync generators alike.
-- The `on_stream_complete` callback gives you the accumulated `RedactionState` to persist.
+- Works with async and sync generators alike.
+- State tracking persists across yields to keep token indices stable internally.
+- `on_stream_complete(state)` exposes the final `RedactionState` for persistence or auditing; it isn’t needed to consume the stream.
+
+### Streaming State Tracking
+
+- Source of truth: only function arguments build the redaction map.
+- Unredaction on exit: every yielded or returned value is unredacted using that map.
+- Stable indices: during streaming, Redactyl tracks observed tokens for monitoring, keeping numbering consistent across yields.
+- Persistence hook: capture the final `RedactionState` with `on_stream_complete` if you need to store tokenized logs or reconcile offline data.
 
 ### 3) Containers: Lists, Dicts, Sets, Tuples, Frozensets
 
@@ -195,15 +207,16 @@ python -m spacy download en_core_web_sm
 
 ## Pydantic-Friendly API Surface
 
-- `@pii.protect`: Auto-protects Pydantic `BaseModel` args, traverses containers, and unprotects returns.
+- `@pii.protect`: Auto-protects Pydantic `BaseModel` args, traverses containers, and unprotects returns and yields (membrane behavior).
 - Function modes: Detects sync, async, generator, and async-generator transparently.
 - `pii_field(...)`: Annotate fields for explicit types or to disable detection per-field.
 - Callbacks: `on_detection`, `on_hallucination`, `on_gliner_unavailable`, `on_batch_error`, `on_unredaction_issue`, `on_gliner_model_error`.
-- Streaming: `on_stream_complete(state)` provides the accumulated `RedactionState` after all yields.
+- Streaming: yields are unredacted to callers; `on_stream_complete(state)` exposes the final `RedactionState` for persistence.
 
 ## v0.2.0 Highlights
 
 - Containers: Deep traversal for `list`, `dict`, `set`, `tuple`, and `frozenset` (both inputs and returns).
+- Streaming membrane: generators now unredact yields; callers see original PII.
 - Streaming persistence: `on_stream_complete` surfaces the final `RedactionState` after generator completion.
 - Name components: Full-name phrases establish the source of truth; partials reuse the same index.
 - Smarter decorator: Auto-detects async/sync, generator/async-generator; protects models; unprotects returns.

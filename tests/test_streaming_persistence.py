@@ -1,10 +1,12 @@
 """Tests for streaming with persistent token numbering."""
 
+from typing import Optional
+
 import pytest
 from pydantic import BaseModel
 
 from redactyl.pydantic_integration import PIIConfig
-from redactyl.types import PIIEntity, PIIType
+from redactyl.types import PIIEntity, PIIType, RedactionState
 
 
 class User(BaseModel):
@@ -28,9 +30,20 @@ class FakeDetector:
 
 @pytest.mark.asyncio
 async def test_streaming_persistent_name_indices_async():
-    """Test that name indices persist across async yields."""
+    """Async generator yields unredacted values; state persists indices."""
     detector = FakeDetector()
-    config = PIIConfig(detector=detector, batch_detection=False, use_name_parsing=False)
+    captured_state: Optional[RedactionState] = None
+
+    def on_complete(state: RedactionState) -> None:
+        nonlocal captured_state
+        captured_state = state
+
+    config = PIIConfig(
+        detector=detector,
+        batch_detection=False,
+        use_name_parsing=False,
+        on_stream_complete=on_complete,
+    )
 
     @config.protect
     async def gen():
@@ -41,15 +54,31 @@ async def test_streaming_persistent_name_indices_async():
     async for item in gen():
         out.append(item)
 
-    # Both should have [PERSON_1] since "John" is a component of "John Doe"
-    assert "[PERSON_1]" in out[0].name
-    assert "[PERSON_1]" in out[1].name
+    # Outside the bubble, values are unredacted
+    assert out[0].name == "John Doe"
+    assert out[1].name == "John"
+
+    # Accumulated state has persistent token indices
+    assert captured_state is not None
+    person_tokens = [t for t in captured_state.tokens if t.startswith("[PERSON_")]
+    assert set(person_tokens) == {"[PERSON_1]"}
 
 
 def test_streaming_persistent_name_indices_sync():
-    """Test that name indices persist across sync yields."""
+    """Sync generator yields unredacted values; state persists indices."""
     detector = FakeDetector()
-    config = PIIConfig(detector=detector, batch_detection=False, use_name_parsing=False)
+    captured_state: Optional[RedactionState] = None
+
+    def on_complete(state: RedactionState) -> None:
+        nonlocal captured_state
+        captured_state = state
+
+    config = PIIConfig(
+        detector=detector,
+        batch_detection=False,
+        use_name_parsing=False,
+        on_stream_complete=on_complete,
+    )
 
     @config.protect
     def gen():
@@ -57,14 +86,19 @@ def test_streaming_persistent_name_indices_sync():
         yield User(name="John", email="c@d.com")
 
     out = list(gen())
-    
-    # Both should have [PERSON_1] since "John" is a component of "John Doe"
-    assert "[PERSON_1]" in out[0].name
-    assert "[PERSON_1]" in out[1].name
+
+    # Outside the bubble, values are unredacted
+    assert out[0].name == "John Doe"
+    assert out[1].name == "John"
+
+    # Accumulated state has persistent token indices
+    assert captured_state is not None
+    person_tokens = [t for t in captured_state.tokens if t.startswith("[PERSON_")]
+    assert set(person_tokens) == {"[PERSON_1]"}
 
 
 def test_streaming_persistent_email_indices():
-    """Test that non-name entities also get persistent indices."""
+    """Non-name entities get persistent indices via accumulated state."""
     
     class EmailDetector:
         """Detector for emails."""
@@ -84,7 +118,13 @@ def test_streaming_persistent_email_indices():
             return res
     
     detector = EmailDetector()
-    config = PIIConfig(detector=detector, batch_detection=True)
+    captured_state: Optional[RedactionState] = None
+
+    def on_complete(state: RedactionState) -> None:
+        nonlocal captured_state
+        captured_state = state
+
+    config = PIIConfig(detector=detector, batch_detection=True, on_stream_complete=on_complete)
     
     @config.protect
     def gen():
@@ -93,15 +133,13 @@ def test_streaming_persistent_email_indices():
         yield User(name="Charlie", email="alice@example.com")  # Repeated email
     
     out = list(gen())
-    
-    # Streaming yields protected (redacted) models
-    print(f"Email 1: {out[0].email}")  
-    print(f"Email 2: {out[1].email}")
-    print(f"Email 3: {out[2].email}")
-    
-    # First email gets [EMAIL_1]
-    assert "[EMAIL_1]" in out[0].email
-    # Second unique email gets [EMAIL_2]
-    assert "[EMAIL_2]" in out[1].email
-    # Third is same as first, should reuse [EMAIL_1]
-    assert "[EMAIL_1]" in out[2].email
+
+    # Outside the bubble, values are unredacted
+    assert out[0].email == "alice@example.com"
+    assert out[1].email == "bob@example.com"
+    assert out[2].email == "alice@example.com"
+
+    # Accumulated state shows two unique EMAIL tokens with stable indices
+    assert captured_state is not None
+    email_indices = {rt.token_index for rt in captured_state.tokens.values() if rt.pii_type.name == "EMAIL"}
+    assert email_indices == {1, 2}

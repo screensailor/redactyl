@@ -357,10 +357,12 @@ class PIIConfig:
                 callbacks=callbacks,
             )
 
-            # Process input arguments
+            # Process input arguments only (build input redaction state)
             protected_args: list[Any] = []
             protected_kwargs: dict[str, Any] = {}
-            accumulated_state = RedactionState()
+            input_state = RedactionState()
+            # Track tokens observed in yields for persistence/monitoring
+            observed_state = RedactionState()
 
             # Bind arguments to get parameter names
             bound = sig.bind(*args, **kwargs)
@@ -378,7 +380,7 @@ class PIIConfig:
             # Process all input models together if there are multiple
             if len(model_params) > 1:
                 # Batch process for consistent tokenization
-                protected_models, accumulated_state = protector.protect_models_batch(model_params)
+                protected_models, input_state = protector.protect_models_batch(model_params)
 
                 # Map protected models back to their parameter positions
                 model_idx = 0
@@ -394,11 +396,19 @@ class PIIConfig:
 
                         model_idx += 1
                     else:
-                        # Pass through non-model arguments
-                        if param_name in bound.kwargs:
-                            protected_kwargs[param_name] = param_value
+                        # Pass through or protect non-model arguments
+                        if self.traverse_containers:
+                            new_val, st = protector.protect_any(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = new_val
+                            else:
+                                protected_args.append(new_val)
+                            input_state = input_state.merge(st)
                         else:
-                            protected_args.append(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = param_value
+                            else:
+                                protected_args.append(param_value)
             else:
                 # Process arguments individually
                 for param_name, param_value in bound.arguments.items():
@@ -412,34 +422,69 @@ class PIIConfig:
                         else:
                             protected_args.append(protected_model)
 
-                        # Accumulate state
-                        accumulated_state = accumulated_state.merge(state)
+                        # Accumulate input state
+                        input_state = input_state.merge(state)
                     else:
-                        # Pass through non-model arguments
-                        if param_name in bound.kwargs:
-                            protected_kwargs[param_name] = param_value
+                        # Pass through or protect non-model arguments
+                        if self.traverse_containers:
+                            new_val, st = protector.protect_any(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = new_val
+                            else:
+                                protected_args.append(new_val)
+                            input_state = input_state.merge(st)
                         else:
-                            protected_args.append(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = param_value
+                            else:
+                                protected_args.append(param_value)
 
             # Call the async generator with protected arguments
             try:
                 async for item in func(*protected_args, **protected_kwargs):
+                    # Only unredact yields using the input_state; never protect yields
                     if isinstance(item, BaseModel):
-                        # Protect the yielded model to redact its PII
-                        protected_item, item_state = protector.protect_model(item)
+                        # Observe tokens present in the yielded item without affecting unredaction
+                        _, item_state_observed = protector.protect_model(item)
+                        observed_state = observed_state.merge(item_state_observed)
 
-                        # Merge the state from this yield into accumulated state
-                        accumulated_state = accumulated_state.merge(item_state)
+                        unprotected_item, issues = protector.unprotect_model(item, input_state)
+                        if issues and self.on_hallucination:
+                            responses = self.on_hallucination(issues)
+                            unprotected_item = self._apply_hallucination_responses(
+                                unprotected_item, issues, responses
+                            )
+                        elif issues:
+                            if self.on_unredaction_issue is not None and callable(self.on_unredaction_issue):
+                                for issue in issues:
+                                    self.on_unredaction_issue(issue)
+                            else:
+                                for issue in issues:
+                                    warnings.warn(
+                                        f"PII unredaction issue: {issue.token} - {issue.issue_type}"
+                                        + (f" ({issue.details})" if issue.details else ""),
+                                        UserWarning,
+                                        stacklevel=3,
+                                    )
 
-                        # Yield the protected (redacted) model
-                        yield protected_item
+                        # Yield unredacted value to the caller
+                        yield unprotected_item
                     else:
-                        # Pass through non-model items
-                        yield item
+                        if self.traverse_containers:
+                            # Observe tokens in yielded containers without affecting unredaction
+                            _, item_state_observed = protector.protect_any(item)
+                            observed_state = observed_state.merge(item_state_observed)
+                            # Unredact containers/strings directly using input_state
+                            unprotected_any = self._unprotect_and_handle_hallucinations(item, protector, input_state)
+                            yield unprotected_any
+                        else:
+                            # Pass through non-model items when not traversing
+                            yield item
             finally:
                 # Notify completion with accumulated state
                 if callable(self.on_stream_complete):
-                    self.on_stream_complete(accumulated_state)
+                    # Expose the observed tokens from the stream for persistence/monitoring
+                    self.on_stream_complete(observed_state)
 
         return async_gen_wrapper
 
@@ -484,10 +529,12 @@ class PIIConfig:
                 callbacks=callbacks,
             )
 
-            # Process input arguments
+            # Process input arguments only (build input redaction state)
             protected_args: list[Any] = []
             protected_kwargs: dict[str, Any] = {}
-            accumulated_state = RedactionState()
+            input_state = RedactionState()
+            # Track tokens observed in yields for persistence/monitoring
+            observed_state = RedactionState()
 
             # Bind arguments to get parameter names
             bound = sig.bind(*args, **kwargs)
@@ -505,7 +552,7 @@ class PIIConfig:
             # Process all input models together if there are multiple
             if len(model_params) > 1:
                 # Batch process for consistent tokenization
-                protected_models, accumulated_state = protector.protect_models_batch(model_params)
+                protected_models, input_state = protector.protect_models_batch(model_params)
 
                 # Map protected models back to their parameter positions
                 model_idx = 0
@@ -521,11 +568,19 @@ class PIIConfig:
 
                         model_idx += 1
                     else:
-                        # Pass through non-model arguments
-                        if param_name in bound.kwargs:
-                            protected_kwargs[param_name] = param_value
+                        # Pass through or protect non-model arguments
+                        if self.traverse_containers:
+                            new_val, st = protector.protect_any(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = new_val
+                            else:
+                                protected_args.append(new_val)
+                            input_state = input_state.merge(st)
                         else:
-                            protected_args.append(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = param_value
+                            else:
+                                protected_args.append(param_value)
             else:
                 # Process arguments individually
                 for param_name, param_value in bound.arguments.items():
@@ -539,34 +594,69 @@ class PIIConfig:
                         else:
                             protected_args.append(protected_model)
 
-                        # Accumulate state
-                        accumulated_state = accumulated_state.merge(state)
+                        # Accumulate input state
+                        input_state = input_state.merge(state)
                     else:
-                        # Pass through non-model arguments
-                        if param_name in bound.kwargs:
-                            protected_kwargs[param_name] = param_value
+                        # Pass through or protect non-model arguments
+                        if self.traverse_containers:
+                            new_val, st = protector.protect_any(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = new_val
+                            else:
+                                protected_args.append(new_val)
+                            input_state = input_state.merge(st)
                         else:
-                            protected_args.append(param_value)
+                            if param_name in bound.kwargs:
+                                protected_kwargs[param_name] = param_value
+                            else:
+                                protected_args.append(param_value)
 
             # Call the generator with protected arguments
             try:
                 for item in func(*protected_args, **protected_kwargs):
+                    # Only unredact yields using the input_state; never protect yields
                     if isinstance(item, BaseModel):
-                        # Protect the yielded model to redact its PII
-                        protected_item, item_state = protector.protect_model(item)
+                        # Observe tokens present in the yielded item without affecting unredaction
+                        _, item_state_observed = protector.protect_model(item)
+                        observed_state = observed_state.merge(item_state_observed)
 
-                        # Merge the state from this yield into accumulated state
-                        accumulated_state = accumulated_state.merge(item_state)
+                        unprotected_item, issues = protector.unprotect_model(item, input_state)
+                        if issues and self.on_hallucination:
+                            responses = self.on_hallucination(issues)
+                            unprotected_item = self._apply_hallucination_responses(
+                                unprotected_item, issues, responses
+                            )
+                        elif issues:
+                            if self.on_unredaction_issue is not None and callable(self.on_unredaction_issue):
+                                for issue in issues:
+                                    self.on_unredaction_issue(issue)
+                            else:
+                                for issue in issues:
+                                    warnings.warn(
+                                        f"PII unredaction issue: {issue.token} - {issue.issue_type}"
+                                        + (f" ({issue.details})" if issue.details else ""),
+                                        UserWarning,
+                                        stacklevel=3,
+                                    )
 
-                        # Yield the protected (redacted) model
-                        yield protected_item
+                        # Yield unredacted value to the caller
+                        yield unprotected_item
                     else:
-                        # Pass through non-model items
-                        yield item
+                        if self.traverse_containers:
+                            # Observe tokens in yielded containers without affecting unredaction
+                            _, item_state_observed = protector.protect_any(item)
+                            observed_state = observed_state.merge(item_state_observed)
+                            # Unredact containers/strings directly using input_state
+                            unprotected_any = self._unprotect_and_handle_hallucinations(item, protector, input_state)
+                            yield unprotected_any
+                        else:
+                            # Pass through non-model items when not traversing
+                            yield item
             finally:
                 # Notify completion with accumulated state
                 if callable(self.on_stream_complete):
-                    self.on_stream_complete(accumulated_state)
+                    # Expose the observed tokens from the stream for persistence/monitoring
+                    self.on_stream_complete(observed_state)
 
         return gen_wrapper
 

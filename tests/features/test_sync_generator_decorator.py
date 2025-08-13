@@ -38,7 +38,7 @@ def process_messages(input: Message) -> Generator[Response, None, None]:
 
 
 def test_sync_generator_decorator():
-    """Test that the decorator handles sync generators correctly."""
+    """Sync generator yields should be unredacted to the caller."""
     # Input with PII
     user_input = Message(text="Contact John Smith at john@example.com")
     
@@ -48,24 +48,19 @@ def test_sync_generator_decorator():
     # Verify we got 3 responses
     assert len(responses) == 3
     
-    # Check first response
+    # Check first response (unredacted outside the bubble)
     assert responses[0].step == 1
-    assert "Jane Doe" not in responses[0].message.text
-    assert ("[NAME_" in responses[0].message.text or "[PERSON_" in responses[0].message.text)
-    assert "New York" not in responses[0].message.text
-    assert "[LOCATION_" in responses[0].message.text
+    assert "Jane Doe" in responses[0].message.text
+    assert "New York" in responses[0].message.text
     
-    # Check second response
+    # Check second response (unredacted outside the bubble)
     assert responses[1].step == 2
-    assert "jane@example.com" not in responses[1].message.text
-    assert "[EMAIL_" in responses[1].message.text
+    assert "jane@example.com" in responses[1].message.text
     
-    # Check third response (echoes protected input)
+    # Check third response echoes input unredacted to caller
     assert responses[2].step == 3
-    assert "John Smith" not in responses[2].message.text
-    assert "john@example.com" not in responses[2].message.text
-    assert "[NAME_" in responses[2].message.text
-    assert "[EMAIL_" in responses[2].message.text
+    assert "John Smith" in responses[2].message.text
+    assert "john@example.com" in responses[2].message.text
 
 
 def test_sync_generator_with_non_model_yields():
@@ -82,5 +77,5 @@ def test_sync_generator_with_non_model_yields():
     assert len(results) == 3
     assert results[0] == "Starting processing..."
     assert isinstance(results[1], Response)
-    assert "Alice Brown" not in results[1].message.text
+    assert "Alice Brown" in results[1].message.text
     assert results[2] == "Finishing up..."
