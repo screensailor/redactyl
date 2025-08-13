@@ -51,7 +51,7 @@ class SmartMockDetector(BaseDetector):
 
     def _filter_overlapping(self, entities: list[PIIEntity]) -> list[PIIEntity]:
         """Filter overlapping entities, keeping the longer/more specific ones.
-        
+
         Policy: Prefer longer spans (more specific) over shorter ones.
         This is consistent with core.py's _filter_overlapping_entities.
         """
@@ -75,9 +75,7 @@ class SmartMockDetector(BaseDetector):
                 # Check if we should replace the previous one
                 if filtered and entity.start < filtered[-1].end:
                     # They overlap - keep the longer one
-                    if (entity.end - entity.start) > (
-                        filtered[-1].end - filtered[-1].start
-                    ):
+                    if (entity.end - entity.start) > (filtered[-1].end - filtered[-1].start):
                         # This one is longer, replace
                         filtered[-1] = entity
                         last_end = entity.end
@@ -105,7 +103,7 @@ class SmartMockDetector(BaseDetector):
                 current_pos = entity.start
                 # Track if we've seen the first name yet (excluding titles)
                 seen_first_name = False
-                
+
                 for i, part in enumerate(parts):
                     # Determine type based on position and content
                     if part in ["Dr.", "Mr.", "Ms.", "Mrs."]:

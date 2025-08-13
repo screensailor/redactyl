@@ -53,9 +53,10 @@ class BatchDetector:
         self.detector = detector
         self.use_position_tracking = use_position_tracking
         self.use_name_parsing = use_name_parsing
-        
+
         if callbacks is None:
             from redactyl.callbacks import CallbackContext
+
             callbacks = CallbackContext()
         self.callbacks = callbacks
 
@@ -98,9 +99,7 @@ class BatchDetector:
             # For boundary markers, check if they appear in content
             boundary_issue = False
             if not self.use_position_tracking:
-                boundary_issue = any(
-                    self.FIELD_BOUNDARY in value for value in fields.values()
-                )
+                boundary_issue = any(self.FIELD_BOUNDARY in value for value in fields.values())
 
             # Trigger callback for batch error
             batch_error = BatchDetectionError(
@@ -115,9 +114,7 @@ class BatchDetector:
         # Map entities back to their fields
         return self._map_entities_to_fields(all_entities, field_infos)
 
-    def _build_composite_position_based(
-        self, fields: dict[str, str], field_infos: list[FieldInfo]
-    ) -> str:
+    def _build_composite_position_based(self, fields: dict[str, str], field_infos: list[FieldInfo]) -> str:
         """
         Build composite text using position-based tracking.
 
@@ -126,27 +123,25 @@ class BatchDetector:
         continuous text. The newlines create paragraph breaks that NLP tools respect,
         while the pilcrows provide a clear, visible boundary that's unlikely to
         appear in natural text.
-        
+
         Raises:
             BatchDetectionError: If any field contains the separator sequence
         """
         FIELD_SEPARATOR = "\n¶¶\n"
-        
+
         # Check if separator exists in any field
-        fields_with_separator = [
-            path for path, value in fields.items() 
-            if FIELD_SEPARATOR in value
-        ]
-        
+        fields_with_separator = [path for path, value in fields.items() if FIELD_SEPARATOR in value]
+
         if fields_with_separator:
             from redactyl.exceptions import BatchDetectionError
+
             raise BatchDetectionError(
                 f"Field separator '{repr(FIELD_SEPARATOR)}' found in input fields",
                 failed_fields=fields_with_separator,
                 separator_issue=True,
                 original_error=None,
             )
-        
+
         composite_parts: list[str] = []
         current_pos = 0
 
@@ -177,9 +172,7 @@ class BatchDetector:
 
         return "".join(composite_parts)
 
-    def _build_composite_with_boundaries(
-        self, fields: dict[str, str], field_infos: list[FieldInfo]
-    ) -> str:
+    def _build_composite_with_boundaries(self, fields: dict[str, str], field_infos: list[FieldInfo]) -> str:
         """
         Build composite text using boundary markers (legacy mode).
 
@@ -224,9 +217,7 @@ class BatchDetector:
         Preserves original field order for consistent entity numbering.
         """
         # Pre-populate result with field paths in original order
-        result: dict[str, list[PIIEntity]] = {
-            field_info.path: [] for field_info in field_infos
-        }
+        result: dict[str, list[PIIEntity]] = {field_info.path: [] for field_info in field_infos}
         unmapped_entities: list[PIIEntity] = []
 
         for entity in all_entities:
@@ -315,9 +306,7 @@ class SmartBatchDetector(BatchDetector):
             use_name_parsing: Whether to parse name components
         """
         # Always use position tracking in smart mode
-        super().__init__(
-            detector, use_position_tracking=True, use_name_parsing=use_name_parsing
-        )
+        super().__init__(detector, use_position_tracking=True, use_name_parsing=use_name_parsing)
 
     def detect_batch(
         self,
@@ -355,9 +344,7 @@ class SmartBatchDetector(BatchDetector):
 
         return all_results
 
-    def _group_fields(
-        self, fields: dict[str, str], field_configs: dict[str, dict[str, Any]]
-    ) -> dict[str, list[str]]:
+    def _group_fields(self, fields: dict[str, str], field_configs: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
         """Group fields by their detection requirements."""
         groups: dict[str, list[str]] = {"default": []}
 

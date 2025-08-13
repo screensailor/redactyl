@@ -37,7 +37,7 @@ PRESIDIO_TO_PII_TYPE: dict[str, PIIType] = {
 @dataclass
 class PresidioDetector(BaseDetector):
     """PII detector using Microsoft Presidio.
-    
+
     Supports optional GLiNER integration for enhanced name parsing.
     Install GLiNER with: pip install redactyl[gliner]
     """
@@ -62,9 +62,7 @@ class PresidioDetector(BaseDetector):
         nlp_engine = provider.create_engine()
 
         # Initialize analyzer with NLP engine
-        self._analyzer = AnalyzerEngine(
-            nlp_engine=nlp_engine, supported_languages=[self.language]
-        )
+        self._analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=[self.language])
 
         # If no entities specified, use all mapped ones
         if self.supported_entities is None:
@@ -73,13 +71,14 @@ class PresidioDetector(BaseDetector):
         # Initialize callbacks if not provided
         if self.callbacks is None:
             from redactyl.callbacks import CallbackContext
+
             self.callbacks = CallbackContext.with_defaults()
 
         # Initialize GLiNER parser if requested
         if self.use_gliner_for_names:
             try:
                 from redactyl.detectors.gliner_parser import GlinerNameParser
-                
+
                 self._gliner_parser = GlinerNameParser(callbacks=self.callbacks)
                 # Check if GLiNER is actually available
                 if not self._gliner_parser.is_available:
@@ -201,7 +200,9 @@ class PresidioDetector(BaseDetector):
                 )
 
             # Only add SSN if it's in supported entities
-            if self.supported_entities and ("US_SSN" in self.supported_entities or "US_ITIN" in self.supported_entities):
+            if self.supported_entities and (
+                "US_SSN" in self.supported_entities or "US_ITIN" in self.supported_entities
+            ):
                 for m in ssn_pattern.finditer(text):
                     start, end = m.start(1), m.end(1)
                     if (start, end) in existing_spans:
@@ -226,7 +227,7 @@ class PresidioDetector(BaseDetector):
 
         This method first detects PERSON entities, then attempts to
         parse them into components (title, first, middle, last).
-        
+
         Uses GLiNER if available and requested, otherwise falls back to nameparser.
         """
         # Get base detections
@@ -248,11 +249,9 @@ class PresidioDetector(BaseDetector):
 
         return enhanced_entities
 
-    def _parse_name_components(
-        self, person_entity: PIIEntity
-    ) -> list[PIIEntity] | None:
+    def _parse_name_components(self, person_entity: PIIEntity) -> list[PIIEntity] | None:
         """Parse a PERSON entity into name components.
-        
+
         Attempts to use GLiNER first if available, then falls back to nameparser.
         """
         # First try GLiNER if available and actually loaded

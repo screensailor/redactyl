@@ -89,10 +89,7 @@ class UnredactionError(PIILoopError):
             details.append(f"Unmapped tokens: {unmapped_tokens}")
 
             if not fuzzy_enabled:
-                details.append(
-                    "Tip: Enable fuzzy matching with fuzzy=True to handle "
-                    "LLM-generated token variations."
-                )
+                details.append("Tip: Enable fuzzy matching with fuzzy=True to handle LLM-generated token variations.")
 
         super().__init__("\n".join(details))
 
@@ -112,10 +109,7 @@ class ConfigurationError(PIILoopError):
         details = [message]
 
         if missing_dependency:
-            details.append(
-                f"Missing dependency: {missing_dependency}. "
-                f"Install with: pip install {missing_dependency}"
-            )
+            details.append(f"Missing dependency: {missing_dependency}. Install with: pip install {missing_dependency}")
 
         if config_key:
             details.append(f"Configuration key: {config_key}")
@@ -144,8 +138,7 @@ class NameParsingError(PIILoopError):
             details.append(f"Parse result: {parse_result}")
 
         details.append(
-            "Note: Name parsing may fail for non-Western names, "
-            "single names, or names with unusual formatting."
+            "Note: Name parsing may fail for non-Western names, single names, or names with unusual formatting."
         )
 
         super().__init__("\n".join(details))

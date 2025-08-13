@@ -49,10 +49,10 @@ def _gliner_unavailable() -> bool:
 @dataclass
 class GlinerNameParser:
     """Parse names into components using GLiNER model.
-    
+
     GLiNER is an optional dependency. If not installed, this parser
     will gracefully return None and allow fallback to nameparser.
-    
+
     Installation: pip install redactyl[gliner]
     """
 
@@ -73,6 +73,7 @@ class GlinerNameParser:
         self._available = False
         if self.callbacks is None:
             from redactyl.callbacks import CallbackContext
+
             self.callbacks = CallbackContext.with_defaults()
 
         # If GLiNER is clearly unavailable, provide early signal
@@ -98,7 +99,7 @@ class GlinerNameParser:
             try:
                 if _gliner_unavailable():
                     raise ImportError("gliner not available")
-                
+
                 # Check cache first to avoid repeated downloads
                 # But only use cache if GLiNER is still available (for test mocking)
                 if self.model_name in _GLINER_MODEL_CACHE and not _gliner_unavailable():
@@ -107,7 +108,7 @@ class GlinerNameParser:
                     # Load model and cache it
                     self._model = GLiNER.from_pretrained(self.model_name)  # type: ignore[union-attr]
                     _GLINER_MODEL_CACHE[self.model_name] = self._model
-                
+
                 self._initialized = True
                 self._available = True
             except ImportError:
@@ -155,9 +156,7 @@ class GlinerNameParser:
 
         try:
             # Get predictions from GLiNER
-            predictions: list[dict[str, Any]] = self._model.predict_entities(
-                person_entity.value, labels, threshold=0.5
-            )
+            predictions: list[dict[str, Any]] = self._model.predict_entities(person_entity.value, labels, threshold=0.5)
 
             if not predictions:
                 return None
@@ -236,10 +235,7 @@ class GlinerNameParser:
                     if not has_title:
                         # Add the title component
                         title_end = len(title)
-                        if (
-                            title_end < len(person_entity.value)
-                            and person_entity.value[title_end] == "."
-                        ):
+                        if title_end < len(person_entity.value) and person_entity.value[title_end] == ".":
                             title_end += 1
                         components.insert(
                             0,
@@ -286,9 +282,7 @@ class GlinerNameParser:
         labels = ["title", "first_name", "middle_name", "last_name"]
 
         try:
-            predictions: list[dict[str, Any]] = self._model.predict_entities(
-                name, labels, threshold=0.5
-            )
+            predictions: list[dict[str, Any]] = self._model.predict_entities(name, labels, threshold=0.5)
 
             for pred in predictions:
                 label: str = pred.get("label", "")

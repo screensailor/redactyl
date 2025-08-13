@@ -20,60 +20,58 @@ class PIILoop:
         callbacks: CallbackContext | None = None,
     ) -> None:
         self._detector = detector
-        self._hallucination_handler = (
-            hallucination_handler or DefaultHallucinationHandler()
-        )
+        self._hallucination_handler = hallucination_handler or DefaultHallucinationHandler()
         self._use_name_parsing = use_name_parsing
         self._callbacks = callbacks or CallbackContext.with_defaults()
-    
+
     @property
     def detector(self) -> PIIDetector:
         """Get the current detector (for testing purposes)."""
         return self._detector
-    
+
     @detector.setter
     def detector(self, value: PIIDetector) -> None:
         """Set a new detector (for testing purposes)."""
         self._detector = value
-    
+
     @property
     def use_name_parsing(self) -> bool:
         """Get use_name_parsing setting (for testing purposes)."""
         return self._use_name_parsing
-    
+
     @property
     def callbacks(self) -> CallbackContext:
         """Get callbacks (for testing purposes)."""
         return self._callbacks
-    
+
     @classmethod
     def from_config(cls, config: "PIIConfig") -> "PIILoop":
         """Create a PIILoop instance from a PIIConfig.
-        
+
         Args:
             config: PIIConfig with detector and callbacks configured
-            
+
         Returns:
             PIILoop instance configured from the config
         """
         from redactyl.callbacks import CallbackContext
-        
+
         # Create callback context from config
         # Filter out UNSET values before passing to CallbackContext
         from redactyl.pydantic_integration import UNSET
-        
+
         kwargs = {}
         if config.on_gliner_unavailable is not UNSET:
-            kwargs['on_gliner_unavailable'] = config.on_gliner_unavailable
+            kwargs["on_gliner_unavailable"] = config.on_gliner_unavailable
         if config.on_detection is not UNSET:
-            kwargs['on_detection'] = config.on_detection
+            kwargs["on_detection"] = config.on_detection
         if config.on_batch_error is not UNSET:
-            kwargs['on_batch_error'] = config.on_batch_error
+            kwargs["on_batch_error"] = config.on_batch_error
         if config.on_unredaction_issue is not UNSET:
-            kwargs['on_unredaction_issue'] = config.on_unredaction_issue
-        
+            kwargs["on_unredaction_issue"] = config.on_unredaction_issue
+
         callbacks = CallbackContext(**kwargs)
-        
+
         return cls(
             detector=config.detector,
             use_name_parsing=config.use_name_parsing,
@@ -89,7 +87,7 @@ class PIILoop:
             entities = self._detector.detect_with_name_parsing(text)
         else:
             entities = self._detector.detect(text)
-        
+
         # Trigger detection callback if configured
         if entities:
             self._callbacks.trigger_detection(entities)
@@ -118,17 +116,11 @@ class PIILoop:
             state = state.with_token(redaction_token.token, redaction_token)
 
             # Replace in text
-            redacted_text = (
-                redacted_text[: entity.start]
-                + redaction_token.token
-                + redacted_text[entity.end :]
-            )
+            redacted_text = redacted_text[: entity.start] + redaction_token.token + redacted_text[entity.end :]
 
         return redacted_text, state
 
-    def unredact(
-        self, text: str, state: RedactionState, fuzzy: bool = False
-    ) -> tuple[str, list[UnredactionIssue]]:
+    def unredact(self, text: str, state: RedactionState, fuzzy: bool = False) -> tuple[str, list[UnredactionIssue]]:
         """
         Restore original values from redacted text.
 
@@ -183,22 +175,16 @@ class PIILoop:
                 # Note: we pass strict=not fuzzy because the handler's strict
                 # parameter means "reject fuzzy matches", which is the opposite
                 # of our fuzzy parameter
-                issue = self._hallucination_handler.handle(
-                    token, state, strict=not fuzzy
-                )
+                issue = self._hallucination_handler.handle(token, state, strict=not fuzzy)
                 if issue:
                     issues.append(issue)
                     # Apply replacement if handler found one (only in fuzzy mode)
                     if issue.replacement and fuzzy:
-                        unredacted_text = unredacted_text.replace(
-                            token, issue.replacement
-                        )
+                        unredacted_text = unredacted_text.replace(token, issue.replacement)
 
         return unredacted_text, issues
 
-    def _assign_name_aware_indices(
-        self, entities: list[PIIEntity]
-    ) -> list[tuple[PIIEntity, int]]:
+    def _assign_name_aware_indices(self, entities: list[PIIEntity]) -> list[tuple[PIIEntity, int]]:
         """
         Assign indices to entities with special handling for name components.
 
@@ -277,9 +263,7 @@ class PIILoop:
                         # Check if this person already has a different full name registered
                         person_has_different_last = False
                         for reg_key, reg_idx in person_registry.items():
-                            if reg_idx == existing_person_idx and reg_key.startswith(
-                                f"{first_name}_"
-                            ):
+                            if reg_idx == existing_person_idx and reg_key.startswith(f"{first_name}_"):
                                 # This person already has a full name registered
                                 if reg_key != full_key:
                                     # Different last name - this is a different person
@@ -342,7 +326,5 @@ class PIILoop:
 
         return tokens_to_create
 
-    def _filter_overlapping_entities(
-        self, entities: list[PIIEntity]
-    ) -> list[PIIEntity]:
+    def _filter_overlapping_entities(self, entities: list[PIIEntity]) -> list[PIIEntity]:
         return filter_overlapping_entities(entities)

@@ -6,9 +6,7 @@ from redactyl.types import RedactionState, UnredactionIssue
 
 
 class HallucinationHandler(Protocol):
-    def handle(
-        self, token: str, state: RedactionState, strict: bool
-    ) -> UnredactionIssue | None:
+    def handle(self, token: str, state: RedactionState, strict: bool) -> UnredactionIssue | None:
         """
         Handle an unmapped token.
 
@@ -27,9 +25,7 @@ class DefaultHallucinationHandler:
     def __init__(self, similarity_threshold: float = 0.8) -> None:
         self._threshold = similarity_threshold
 
-    def handle(
-        self, token: str, state: RedactionState, strict: bool
-    ) -> UnredactionIssue | None:
+    def handle(self, token: str, state: RedactionState, strict: bool) -> UnredactionIssue | None:
         # Check if token exists in state
         if token in state.tokens:
             return None  # Valid token
@@ -56,9 +52,7 @@ class DefaultHallucinationHandler:
                     issue_type="fuzzy_match",
                     replacement=state.tokens[closest_match].original,
                     confidence=similarity,
-                    details=(
-                        f"Matched to {closest_match} with {similarity:.2f} confidence"
-                    ),
+                    details=(f"Matched to {closest_match} with {similarity:.2f} confidence"),
                 )
 
         # No good match found - treat as hallucination

@@ -7,9 +7,7 @@ def filter_overlapping_entities(entities: list[PIIEntity]) -> list[PIIEntity]:
     """Filter overlapping entities, preferring longer and higher confidence ones."""
     if not entities:
         return []
-    sorted_entities = sorted(
-        entities, key=lambda e: (e.start, -(e.end - e.start), -e.confidence)
-    )
+    sorted_entities = sorted(entities, key=lambda e: (e.start, -(e.end - e.start), -e.confidence))
     filtered: list[PIIEntity] = []
     last_end = -1
     for e in sorted_entities:

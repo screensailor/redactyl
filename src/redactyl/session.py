@@ -3,9 +3,7 @@ from redactyl.types import RedactionState, RedactionToken, UnredactionIssue
 
 
 class PIISession:
-    def __init__(
-        self, loop: PIILoop, initial_state: RedactionState | None = None
-    ) -> None:
+    def __init__(self, loop: PIILoop, initial_state: RedactionState | None = None) -> None:
         self._loop = loop
         self._accumulated_state = initial_state or RedactionState()
         self._token_counters: dict[str, int] = {}
@@ -20,9 +18,7 @@ class PIISession:
     def __enter__(self) -> "PIISession":
         return self
 
-    def __exit__(
-        self, exc_type: type | None, exc_val: Exception | None, exc_tb: object | None
-    ) -> None:
+    def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: object | None) -> None:
         # Could add cleanup or persistence here if needed
         pass
 
@@ -39,9 +35,7 @@ class PIISession:
         updated_tokens: dict[str, RedactionToken] = {}
 
         # Sort tokens by their position in text to maintain order
-        sorted_tokens = sorted(
-            new_state.tokens.items(), key=lambda x: x[1].entity.start
-        )
+        sorted_tokens = sorted(new_state.tokens.items(), key=lambda x: x[1].entity.start)
 
         for old_token, redaction_token in sorted_tokens:
             entity_type = redaction_token.pii_type.name
@@ -85,9 +79,7 @@ class PIISession:
 
         return redacted
 
-    def unredact(
-        self, text: str, fuzzy: bool = False
-    ) -> tuple[str, list[UnredactionIssue]]:
+    def unredact(self, text: str, fuzzy: bool = False) -> tuple[str, list[UnredactionIssue]]:
         return self._loop.unredact(text, self._accumulated_state, fuzzy=fuzzy)
 
     def get_state(self) -> RedactionState:

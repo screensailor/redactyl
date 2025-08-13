@@ -116,9 +116,7 @@ class RedactionState:
 
         return cls.from_dict(json.loads(json_str))
 
-    def with_token(
-        self, token: str, redaction_token: RedactionToken
-    ) -> "RedactionState":
+    def with_token(self, token: str, redaction_token: RedactionToken) -> "RedactionState":
         new_tokens = {**self.tokens, token: redaction_token}
         return RedactionState(
             tokens=new_tokens,
@@ -146,8 +144,5 @@ class UnredactionIssue:
 
     def __str__(self) -> str:
         if self.replacement:
-            return (
-                f"{self.issue_type}: {self.token} → {self.replacement} "
-                f"(confidence: {self.confidence:.2f})"
-            )
+            return f"{self.issue_type}: {self.token} → {self.replacement} (confidence: {self.confidence:.2f})"
         return f"{self.issue_type}: {self.token} (no replacement found)"
