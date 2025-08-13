@@ -196,7 +196,7 @@ class PresidioDetector(BaseDetector):
                 )
 
             # Only add SSN if it's in supported entities
-            if "US_SSN" in self.supported_entities or "US_ITIN" in self.supported_entities:
+            if self.supported_entities and ("US_SSN" in self.supported_entities or "US_ITIN" in self.supported_entities):
                 for m in ssn_pattern.finditer(text):
                     start, end = m.start(1), m.end(1)
                     if (start, end) in existing_spans:

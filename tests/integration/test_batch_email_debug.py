@@ -46,7 +46,9 @@ def test_batch_email():
     print("Batch Email Test (No GLiNER)")
     print("=" * 60)
     print(f"Original email: '{user.email}'")
+    assert captured is not None, "captured should not be None"
     print(f"Redacted email: '{captured.email}'")
+    assert result is not None, "result should not be None"
     print(f"Restored email: '{result.email}'")
     
     # Now test with GLiNER
@@ -75,7 +77,9 @@ def test_batch_email():
     print("Batch Email Test (With GLiNER)")
     print("=" * 60)
     print(f"Original email: '{user.email}'")
+    assert captured2 is not None, "captured2 should not be None"
     print(f"Redacted email: '{captured2.email}'")
+    assert result2 is not None, "result2 should not be None"
     print(f"Restored email: '{result2.email}'")
     
     # Test direct detection

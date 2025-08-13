@@ -1,0 +1,27 @@
+{
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false,
+  "reportGeneralTypeIssues": true,
+  "reportTypedDictNotRequiredAccess": true,
+  "reportPrivateUsage": true,
+  "reportUnusedImport": true,
+  "reportUnusedVariable": true,
+  "reportUnusedFunction": false,
+  "reportConstantRedefinition": true,
+  "reportIncompatibleVariableOverride": true,
+  "reportMissingParameterType": false,
+  "reportUnknownParameterType": true,
+  "reportPossiblyUnboundVariable": true
+}

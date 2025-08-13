@@ -40,6 +40,7 @@ def test_debug_detection():
     print("Debug: What was detected and redacted?")
     print("=" * 60)
     print(f"Original name:  '{user.name}'")
+    assert captured_redacted is not None, "captured_redacted should not be None"
     print(f"Redacted name:  '{captured_redacted.name}'")
     print()
     print(f"Original email: '{user.email}'")

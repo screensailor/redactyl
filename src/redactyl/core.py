@@ -38,12 +38,20 @@ class PIILoop:
         from redactyl.callbacks import CallbackContext
         
         # Create callback context from config
-        callbacks = CallbackContext(
-            on_gliner_unavailable=config.on_gliner_unavailable,
-            on_detection=config.on_detection,
-            on_batch_error=config.on_batch_error,
-            on_unredaction_issue=config.on_unredaction_issue,
-        )
+        # Filter out UNSET values before passing to CallbackContext
+        from redactyl.pydantic_integration import UNSET
+        
+        kwargs = {}
+        if config.on_gliner_unavailable is not UNSET:
+            kwargs['on_gliner_unavailable'] = config.on_gliner_unavailable
+        if config.on_detection is not UNSET:
+            kwargs['on_detection'] = config.on_detection
+        if config.on_batch_error is not UNSET:
+            kwargs['on_batch_error'] = config.on_batch_error
+        if config.on_unredaction_issue is not UNSET:
+            kwargs['on_unredaction_issue'] = config.on_unredaction_issue
+        
+        callbacks = CallbackContext(**kwargs)
         
         return cls(
             detector=config.detector,
