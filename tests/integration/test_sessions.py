@@ -1,6 +1,5 @@
 """Tests for PIISession management."""
 
-import pytest
 from redactyl import PIIEntity, PIILoop, PIIType
 from redactyl.detectors.mock import MockDetector
 from redactyl.session import PIISession
@@ -64,7 +63,7 @@ class TestPIISession:
             assert redacted1 == "Please contact me [EMAIL_1]"
             
             # Change detector for turn 2
-            loop._detector = MockDetector(entities2)
+            loop.detector = MockDetector(entities2)
             
             # Turn 2 
             text2 = "My phone is 555-1234"
@@ -72,7 +71,7 @@ class TestPIISession:
             assert redacted2 == "My phone is [PHONE_1]"
             
             # Change detector for turn 3
-            loop._detector = MockDetector(entities3)
+            loop.detector = MockDetector(entities3)
             
             # Turn 3 - should use [EMAIL_2] not [EMAIL_1]
             text3 = "Email bob@example.com too"
@@ -153,7 +152,7 @@ class TestPIISession:
             assert "[PERSON_2]" in redacted1
             
             # Turn 2 - should get PERSON_3
-            loop._detector = MockDetector(entities2)
+            loop.detector = MockDetector(entities2)
             text2 = "Charlie joined"
             redacted2 = session.redact(text2)
             assert "[PERSON_3]" in redacted2
@@ -226,7 +225,7 @@ class TestPIISession:
             confidence=0.90
         )
         
-        loop._detector = MockDetector([new_entity])
+        loop.detector = MockDetector([new_entity])
         
         with PIISession(loop, initial_state=initial_state) as session:
             # Should continue numbering from previous state

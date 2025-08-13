@@ -1,7 +1,6 @@
 """Tests for state accumulation across multiple texts."""
 
-import pytest
-from redactyl import PIIEntity, PIILoop, PIIType, RedactionState
+from redactyl import PIIEntity, PIILoop, PIIType
 from redactyl.detectors.mock import MockDetector
 
 
@@ -39,7 +38,7 @@ class TestStateAccumulation:
         assert redacted1 == "Send [EMAIL_1] the info"
         
         # Change detector for second text
-        loop._detector = detector2
+        loop.detector = detector2
         
         # Second redaction (should have independent state)
         text2 = "Forward second@example.com too"
@@ -84,12 +83,12 @@ class TestStateAccumulation:
         # First turn
         loop1 = PIILoop(detector=MockDetector([entity1, entity2]))
         text1 = "alice@example.com or call 555-1234"
-        redacted1, state1 = loop1.redact(text1)
+        _, state1 = loop1.redact(text1)
         
         # Second turn
         loop2 = PIILoop(detector=MockDetector([entity3]))
         text2 = "Also contact bob@example.com"
-        redacted2, state2 = loop2.redact(text2)
+        _, state2 = loop2.redact(text2)
         
         # Merge states
         merged_state = state1.merge(state2)
@@ -135,7 +134,7 @@ class TestStateAccumulation:
         
         loop = PIILoop(detector=detector1)
         text1 = "email1@example.com and email2@example.com"
-        redacted1, state1 = loop.redact(text1)
+        redacted1, _ = loop.redact(text1)
         assert "[EMAIL_1]" in redacted1
         assert "[EMAIL_2]" in redacted1
         
@@ -150,9 +149,9 @@ class TestStateAccumulation:
             )
         ])
         
-        loop._detector = detector2
+        loop.detector = detector2
         text2 = "email3@example.com is new"
-        redacted2, state2 = loop.redact(text2)
+        redacted2, _ = loop.redact(text2)
         
         # Should be [EMAIL_1] not [EMAIL_3]
         assert "[EMAIL_1]" in redacted2

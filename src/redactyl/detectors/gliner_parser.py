@@ -30,7 +30,7 @@ except Exception:  # ImportError or any failure
 _GLINER_MODEL_CACHE: dict[str, Any] = {}
 
 
-def _clear_gliner_cache() -> None:
+def clear_gliner_cache() -> None:
     """Clear the GLiNER model cache. Used for testing."""
     global _GLINER_MODEL_CACHE
     _GLINER_MODEL_CACHE.clear()

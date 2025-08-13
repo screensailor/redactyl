@@ -58,7 +58,7 @@ def test_email_with_pii_config():
     print("PIIConfig Email Test")
     print("=" * 60)
     print(f"Original: {model.email}")
-    print(f"Redacted: {captured.email}")
+    print(f"Redacted: {captured.email if captured else 'None'}")
     print(f"Restored: {result.email}")
     print("=" * 60)
 

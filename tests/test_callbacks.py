@@ -1,6 +1,7 @@
 """Tests for the callback system in redactyl."""
 
 import warnings
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -169,16 +170,16 @@ class TestPIILoopCallbacks:
         
         loop = PIILoop.from_config(config)
         
-        assert loop._detector == detector
-        assert loop._use_name_parsing is False
-        assert loop._callbacks.on_detection == on_detection
+        assert loop.detector == detector
+        assert loop.use_name_parsing is False
+        assert loop.callbacks.on_detection == on_detection
 
 
 class TestPresidioDetectorCallbacks:
     """Tests for PresidioDetector callback integration."""
     
     @patch("redactyl.detectors.gliner_parser.GlinerNameParser")
-    def test_gliner_unavailable_callback(self, mock_parser_class):
+    def test_gliner_unavailable_callback(self, mock_parser_class: Any) -> None:
         """Test that GLiNER unavailable callback is triggered."""
         # Mock the parser to simulate GLiNER not available
         mock_parser = Mock()
@@ -189,7 +190,7 @@ class TestPresidioDetectorCallbacks:
         callbacks = CallbackContext(on_gliner_unavailable=on_gliner)
         
         # Create detector with callbacks
-        detector = PresidioDetector(
+        _ = PresidioDetector(
             use_gliner_for_names=True,
             callbacks=callbacks
         )
@@ -205,7 +206,7 @@ class TestPresidioDetectorCallbacks:
         # This should not produce any warnings
         with warnings.catch_warnings():
             warnings.simplefilter("error")  # Turn warnings into errors
-            detector = PresidioDetector(
+            _ = PresidioDetector(
                 use_gliner_for_names=True,
                 callbacks=callbacks
             )
@@ -241,7 +242,7 @@ class TestPydanticCallbacks:
             return user
         
         user = User(name="John Doe", email="john@example.com", notes="Test notes")
-        result = process_user(user)
+        _ = process_user(user)
         
         # Detection should have been called multiple times (once per field)
         assert on_detection.call_count > 0
@@ -264,7 +265,7 @@ class TestPydanticCallbacks:
             return user
         
         user = User(name="John", email="test@example.com", notes="Notes")
-        result = process_user(user)
+        _ = process_user(user)
         
         # Issue callback should have been triggered for the hallucinated token
         if on_issue.called:
@@ -283,13 +284,13 @@ class TestEndToEndCallbacks:
         def track_gliner():
             events.append("gliner_unavailable")
         
-        def track_detection(entities):
+        def track_detection(entities: list[PIIEntity]) -> None:
             events.append(f"detected_{len(entities)}")
         
-        def track_batch_error(exc):
+        def track_batch_error(exc: Exception) -> None:
             events.append(f"batch_error_{type(exc).__name__}")
         
-        def track_issue(issue):
+        def track_issue(issue: Any) -> None:
             events.append(f"issue_{issue.issue_type}")
         
         # Create config with all callbacks
@@ -308,7 +309,7 @@ class TestEndToEndCallbacks:
         
         # Use the config
         loop = PIILoop.from_config(config)
-        text, state = loop.redact("Alice is here")
+        _, _ = loop.redact("Alice is here")
         
         # Check that detection was tracked
         assert "detected_1" in events
@@ -319,14 +320,14 @@ class TestEndToEndCallbacks:
         logged_messages = []
         
         class Logger:
-            def warning(self, msg):
+            def warning(self, msg: str) -> None:
                 logged_messages.append(("warning", msg))
         
         class Metrics:
             def __init__(self):
                 self.records = []
             
-            def record(self, key, value):
+            def record(self, key: str, value: Any) -> None:
                 self.records.append((key, value))
         
         logger = Logger()
@@ -363,5 +364,5 @@ class TestEndToEndCallbacks:
         # This should not produce any warnings
         with warnings.catch_warnings():
             warnings.simplefilter("error")  # Turn warnings into errors
-            loop = PIILoop.from_config(config)
+            _ = PIILoop.from_config(config)
             # No error should be raised

@@ -18,7 +18,7 @@ from redactyl.pydantic_integration import (
     PydanticPIIProtector,
     pii_field,
 )
-from redactyl.types import PIIEntity, PIIType
+from redactyl.types import PIIEntity, PIIType, UnredactionIssue
 
 # ============= Input Models =============
 
@@ -1046,7 +1046,7 @@ class TestPIIConfig:
 
         hallucination_calls = []
 
-        def handle_hallucinations(issues):
+        def handle_hallucinations(issues: list[UnredactionIssue]) -> list[HallucinationResponse]:
             """Track hallucinations and handle based on type."""
             hallucination_calls.append(issues)
             responses = []
@@ -1272,7 +1272,7 @@ class TestPIIConfig:
             ]
         )
 
-        def mixed_handler(issues):
+        def mixed_handler(issues: list[UnredactionIssue]) -> list[HallucinationResponse]:
             """Handle different token types differently."""
             responses = []
             for issue in issues:

@@ -4,21 +4,21 @@ import pytest
 from redactyl.batch import BatchDetector
 from redactyl.detectors.presidio import PresidioDetector
 from redactyl.entity_tracker import GlobalEntityTracker, NameComponentTracker
-from redactyl.types import PIIEntity, PIIType
+from redactyl.types import PIIType
 
 
 class TestConsistentTokens:
     """Test that the same entity gets the same token across fields."""
     
     @pytest.fixture
-    def detector(self):
+    def detector(self) -> PresidioDetector:
         """Create a Presidio detector instance."""
         try:
             return PresidioDetector(confidence_threshold=0.7)
         except Exception as e:
             pytest.skip(f"Presidio not available: {e}")
     
-    def test_basic_consistency(self, detector):
+    def test_basic_consistency(self, detector: PresidioDetector) -> None:
         """Test basic token consistency across fields."""
         # Fields with repeated entities
         fields = {
@@ -62,7 +62,7 @@ class TestConsistentTokens:
         if email_tokens:
             assert len(set(email_tokens)) == 1, f"Different tokens for email: {email_tokens}"
     
-    def test_case_insensitive_matching(self, detector):
+    def test_case_insensitive_matching(self, detector: PresidioDetector) -> None:
         """Test that entities match regardless of case."""
         fields = {
             "field1": "Contact JOHN SMITH",
@@ -88,7 +88,7 @@ class TestConsistentTokens:
             unique_tokens = set(person_tokens)
             assert len(unique_tokens) == 1, f"Multiple tokens for same person: {unique_tokens}"
     
-    def test_different_entities_different_tokens(self, detector):
+    def test_different_entities_different_tokens(self, detector: PresidioDetector) -> None:
         """Test that different entities get different tokens."""
         fields = {
             "field1": "John Smith and Jane Doe",
@@ -112,7 +112,7 @@ class TestConsistentTokens:
         # We should have different tokens for different entities
         assert len(unique_tokens) >= 2, f"Not enough unique tokens: {unique_tokens}"
     
-    def test_token_numbering(self, detector):
+    def test_token_numbering(self, detector: PresidioDetector) -> None:
         """Test that tokens are numbered consistently."""
         fields = {
             "field1": "Alice called, then Bob, then Carol",
@@ -152,7 +152,7 @@ class TestConsistentTokens:
                 unique_numbers = sorted(set(numbers))
                 assert unique_numbers == list(range(1, max(numbers) + 1))
     
-    def test_name_component_consistency(self, detector):
+    def test_name_component_consistency(self, detector: PresidioDetector) -> None:
         """Test that name components get consistent tokens."""
         # Use the enhanced detector that can parse name components
         enhanced_detector = PresidioDetector(confidence_threshold=0.7)

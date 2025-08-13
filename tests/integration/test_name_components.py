@@ -3,21 +3,21 @@
 import pytest
 from redactyl.detectors.presidio import PresidioDetector
 from redactyl.entity_tracker import NameComponentTracker
-from redactyl.types import PIIEntity, PIIType
+from redactyl.types import PIIType
 
 
 class TestNameComponents:
     """Test detection and tokenization of name components."""
     
     @pytest.fixture
-    def detector(self):
+    def detector(self) -> PresidioDetector:
         """Create a Presidio detector instance."""
         try:
             return PresidioDetector(confidence_threshold=0.7)
         except Exception as e:
             pytest.skip(f"Presidio not available: {e}")
     
-    def test_basic_name_parsing(self, detector):
+    def test_basic_name_parsing(self, detector: PresidioDetector) -> None:
         """Test basic name component detection."""
         text = "Dr. John Michael Smith Jr."
         
@@ -25,8 +25,8 @@ class TestNameComponents:
         entities = detector.detect_with_name_parsing(text)
         
         # Should detect components
-        types_found = {e.type for e in entities}
-        values_found = {e.value for e in entities}
+        _types_found = {e.type for e in entities}
+        _values_found = {e.value for e in entities}
         
         print(f"\nDetected entities: {[(e.type.name, e.value) for e in entities]}")
         
@@ -37,7 +37,7 @@ class TestNameComponents:
             assert any(e.type == PIIType.PERSON for e in entities) or \
                    any(e.type in {PIIType.NAME_FIRST, PIIType.NAME_LAST} for e in entities)
     
-    def test_name_component_tokens(self, detector):
+    def test_name_component_tokens(self, detector: PresidioDetector) -> None:
         """Test that name components get proper tokens."""
         text = "Contact Dr. Jane Smith at jane@example.com"
         
@@ -71,7 +71,7 @@ class TestNameComponents:
             if indices:
                 assert len(set(indices)) <= 2, f"Too many different indices: {indices}"
     
-    def test_multiple_names(self, detector):
+    def test_multiple_names(self, detector: PresidioDetector) -> None:
         """Test handling multiple names with components."""
         text = "Meeting between Mr. Robert Johnson and Ms. Sarah Williams"
         
@@ -102,7 +102,7 @@ class TestNameComponents:
         # Should have tokens for both people
         assert len(by_index) >= 1, "Should detect at least one person"
     
-    def test_partial_name_references(self, detector):
+    def test_partial_name_references(self, detector: PresidioDetector) -> None:
         """Test that partial name references link to full names."""
         fields = {
             "intro": "Dr. Elizabeth Anderson will present",
@@ -161,7 +161,7 @@ class TestNameComponents:
                     if and_indices:
                         assert len(set(and_indices)) == 1, f"Anderson has inconsistent indices: {and_indices}"
     
-    def test_name_with_email_correlation(self, detector):
+    def test_name_with_email_correlation(self, detector: PresidioDetector) -> None:
         """Test correlating names with email addresses."""
         text = "John Smith (john.smith@example.com) is the contact"
         
@@ -181,7 +181,7 @@ class TestNameComponents:
             # Check if username contains name parts
             assert "john" in username.lower() or "smith" in username.lower()
     
-    def test_formal_informal_name_matching(self, detector):
+    def test_formal_informal_name_matching(self, detector: PresidioDetector) -> None:
         """Test matching formal and informal name variants."""
         fields = {
             "formal": "Professor William Johnson, PhD",

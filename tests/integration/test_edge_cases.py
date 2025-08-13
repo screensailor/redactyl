@@ -39,7 +39,7 @@ class TestEdgeCases:
         # LLM nests tokens (shouldn't happen but test robustness)
         llm_response = "[[PERSON_1]_[EMAIL_1]]"
         
-        unredacted, issues = loop.unredact(llm_response, state)
+        unredacted, _ = loop.unredact(llm_response, state)
         assert unredacted == "[John_john@example.com]"
     
     def test_special_characters_in_pii(self):
@@ -107,7 +107,7 @@ class TestEdgeCases:
         assert "[EMAIL_1]" in redacted
         assert long_email not in redacted
         
-        unredacted, issues = loop.unredact(redacted, state)
+        unredacted, _ = loop.unredact(redacted, state)
         assert unredacted == original
     
     def test_empty_pii_values(self):
@@ -148,7 +148,7 @@ class TestEdgeCases:
         ]
         
         for malformed in malformed_cases:
-            unredacted, issues = loop.unredact(malformed, state)
+            unredacted, _ = loop.unredact(malformed, state)
             # Should not leak PII with malformed tokens (except lowercase which works without fuzzy)
             # Note: [EMAIL_1]] will partially match [EMAIL_1], leaving "]" - this is expected behavior
             if malformed == "[EMAIL_1]]":
@@ -180,7 +180,7 @@ class TestEdgeCases:
         ]
         
         for response in llm_responses:
-            unredacted, issues = loop.unredact(response, state)
+            unredacted, _ = loop.unredact(response, state)
             assert "start@example.com" in unredacted or "[EMAIL_1]" not in response
             assert "end@example.com" in unredacted or "[EMAIL_2]" not in response
     
@@ -195,10 +195,10 @@ class TestEdgeCases:
         
         # Frozen dataclasses prevent attribute reassignment
         with pytest.raises(dataclasses.FrozenInstanceError):
-            state1.tokens = {}
+            state1.tokens = {}  # type: ignore[misc]
         
         # But dict itself is mutable - test we handle this correctly
-        original_token = state1.tokens["[PERSON_1]"]
+        _original_token = state1.tokens["[PERSON_1]"]
         # Try to modify the dict (this works but shouldn't affect unredaction)
         # since we should be using the token objects, not mutating state
         
@@ -271,7 +271,7 @@ class TestEdgeCases:
         # Test with session continuing numbering
         with PIISession(loop, initial_state=state) as session:
             # Add one more person
-            loop._detector = MockDetector([
+            loop.detector = MockDetector([
                 PIIEntity(PIIType.PERSON, "Person101", 0, 9, 0.95)
             ])
             
@@ -295,7 +295,7 @@ class TestEdgeCases:
         # Use in session
         with PIISession(loop, initial_state=custom_state) as session:
             # Add some PII
-            loop._detector = MockDetector([
+            loop.detector = MockDetector([
                 PIIEntity(PIIType.EMAIL, "test@example.com", 0, 16, 0.95)
             ])
             session.redact("test@example.com")

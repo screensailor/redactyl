@@ -1,7 +1,5 @@
 """Simple test to verify nameparser and probablepeople are installed and working."""
 
-import pytest
-
 
 def test_nameparser_import():
     """Test that nameparser can be imported."""

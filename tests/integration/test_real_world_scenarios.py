@@ -1,7 +1,5 @@
 """Integration tests for real-world scenarios."""
 
-import json
-import pytest
 from redactyl import PIIEntity, PIILoop, PIIType, PIISession, RedactionState
 from redactyl.detectors.mock import MockDetector
 
@@ -50,7 +48,7 @@ class TestRealWorldScenarios:
         
         with PIISession(loop) as session:
             # Turn 1: Customer provides contact info
-            loop._detector = MockDetector([
+            loop.detector = MockDetector([
                 PIIEntity(PIIType.PERSON, "Sarah Johnson", 22, 35, 0.95),
                 PIIEntity(PIIType.EMAIL, "sarah.j@example.com", 40, 58, 0.98),
                 PIIEntity(PIIType.PHONE, "555-123-4567", 68, 80, 0.99)
@@ -70,7 +68,7 @@ class TestRealWorldScenarios:
             assert len(issues1) == 0
             
             # Turn 2: Customer mentions credit card
-            loop._detector = MockDetector([
+            loop.detector = MockDetector([
                 PIIEntity(PIIType.CREDIT_CARD, "4111-1111-1111-1234", 37, 56, 0.99)
             ])
             
@@ -97,7 +95,7 @@ class TestRealWorldScenarios:
         
         loop = PIILoop(detector=MockDetector(entities))
         original = "Robert Smith works at rsmith@corp.com"
-        redacted, state = loop.redact(original)
+        _, state = loop.redact(original)
         
         # LLM hallucinates additional entities
         llm_response = ("[PERSON_1] ([PERSON_2]) can be reached at [EMAIL_1] "
@@ -127,7 +125,7 @@ class TestRealWorldScenarios:
         
         loop = PIILoop(detector=MockDetector(entities))
         original = "Email jennifer@company.com or call 555-9876"
-        redacted, state = loop.redact(original)
+        _, state = loop.redact(original)
         
         # LLM makes common mistakes
         llm_with_typos = "Contact [EMIAL_1] or [email_1] by phone [PHOEN_1]"
@@ -156,7 +154,7 @@ class TestRealWorldScenarios:
         # Simulate first application session
         with PIISession(loop) as session1:
             msg = "Alice Cooper SSN: 123-45-6789"
-            redacted = session1.redact(msg)
+            _ = session1.redact(msg)
             state_to_save = session1.get_state()
             
             # Serialize state (simulating save to database)
@@ -295,18 +293,18 @@ Contact: mary.j@client.com Phone: 555-9999"""
         
         loop = PIILoop(detector=MockDetector(entities))
         original = "Do not leak: sensitive@data.com"
-        redacted, state = loop.redact(original)
+        _, state = loop.redact(original)
         
         # Simulate various error scenarios
         
         # 1. Corrupted token format
         corrupted = "Email is EMAIL_1] (missing bracket)"
-        unredacted, issues = loop.unredact(corrupted, state)
+        unredacted, _ = loop.unredact(corrupted, state)
         assert "sensitive@data.com" not in unredacted  # No PII leak
         
         # 2. Empty response
         empty_response = ""
-        unredacted, issues = loop.unredact(empty_response, state)
+        unredacted, _ = loop.unredact(empty_response, state)
         assert unredacted == ""
         
         # 3. None/null handling - unredact expects string

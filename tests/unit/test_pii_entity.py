@@ -34,10 +34,10 @@ class TestPIIEntity:
         )
         
         with pytest.raises(AttributeError):
-            entity.value = "Jane Doe"
+            entity.value = "Jane Doe"  # type: ignore[misc]
         
         with pytest.raises(AttributeError):
-            entity.start = 5
+            entity.start = 5  # type: ignore[misc]
     
     def test_invalid_start_position(self):
         """Test that negative start position raises error."""

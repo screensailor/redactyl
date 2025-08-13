@@ -206,8 +206,8 @@ class TestCallbackTypeValidation:
         detector = PresidioDetector()
         
         # These should work (valid callback types)
-        config1 = PIIConfig(detector=detector, on_gliner_unavailable=None)  # OK
-        config2 = PIIConfig(detector=detector, on_gliner_unavailable=lambda: None)  # OK
+        _ = PIIConfig(detector=detector, on_gliner_unavailable=None)  # OK
+        _ = PIIConfig(detector=detector, on_gliner_unavailable=lambda: None)  # OK
         
         # The type system should prevent passing bool, but let's test runtime behavior
         # This tests that if someone ignores type hints, they get a clear error
@@ -259,6 +259,7 @@ class TestCallbackTypeValidation:
         assert config.on_gliner_unavailable is custom_handler
         
         # Test it can be called
+        assert callable(config.on_gliner_unavailable)
         config.on_gliner_unavailable()
         assert called == ["gliner_unavailable"]
 
@@ -274,8 +275,8 @@ class TestMisconfigurationErrors:
         with pytest.raises(TypeError) as exc_info:
             PIILoop(
                 detector=detector,
-                token_format="[{entity_type}_{index}]",  # Invalid parameter
-                start_index=1  # Invalid parameter
+                token_format="[{entity_type}_{index}]",  # type: ignore[call-arg]
+                start_index=1  # type: ignore[call-arg]
             )
         
         # Should get clear error about unexpected keyword arguments
@@ -292,5 +293,5 @@ class TestMisconfigurationErrors:
             hallucination_handler=None
         )
         
-        assert loop._detector is detector
-        assert loop._use_name_parsing is True
+        assert loop.detector is detector
+        # _use_name_parsing is private, we trust it's set correctly

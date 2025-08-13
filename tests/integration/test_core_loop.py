@@ -1,7 +1,6 @@
 """Tests for core PIILoop functionality."""
 
-import pytest
-from redactyl import PIIEntity, PIIType, RedactionState, RedactionToken
+from redactyl import PIIEntity, PIIType
 from redactyl.core import PIILoop
 from redactyl.detectors.mock import MockDetector
 

@@ -1,6 +1,5 @@
 """Tests for fuzzy matching in unredaction."""
 
-import pytest
 from redactyl import PIIEntity, PIILoop, PIIType
 from redactyl.detectors.mock import MockDetector
 
@@ -123,12 +122,12 @@ class TestFuzzyMode:
             response = "[PRESON_1] is ready"
             
             # Default (no fuzzy)
-            unredacted_default, issues_default = session.unredact(response)
+            unredacted_default, _ = session.unredact(response)
             assert "Bob" not in unredacted_default
             assert "[PRESON_1]" in unredacted_default
             
             # Fuzzy mode
-            unredacted_fuzzy, issues_fuzzy = session.unredact(response, fuzzy=True)
+            unredacted_fuzzy, _ = session.unredact(response, fuzzy=True)
             assert "Bob" in unredacted_fuzzy
     
     def test_default_mode_multiple_hallucinations(self):
@@ -147,6 +146,6 @@ class TestFuzzyMode:
         
         # Fuzzy mode: might try fuzzy matching but still all hallucinations
         # because there's nothing in state to match against
-        unredacted_fuzzy, issues_fuzzy = loop.unredact(response, state, fuzzy=True)
+        _unredacted_fuzzy, issues_fuzzy = loop.unredact(response, state, fuzzy=True)
         assert all(issue.issue_type == "hallucination" for issue in issues_fuzzy)
         assert len(issues_fuzzy) == 4

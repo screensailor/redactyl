@@ -4,7 +4,7 @@ import pytest
 from redactyl import PIIEntity, PIIType, RedactionState, RedactionToken
 from redactyl.core import PIILoop
 from redactyl.detectors.mock import MockDetector
-from redactyl.handlers import DefaultHallucinationHandler, HallucinationHandler
+from redactyl.handlers import DefaultHallucinationHandler
 
 
 class TestHallucinationDetection:
@@ -23,7 +23,7 @@ class TestHallucinationDetection:
         
         loop = PIILoop(detector=MockDetector([entity]))
         original = "Send real@example.com the docs"
-        redacted, state = loop.redact(original)
+        _, state = loop.redact(original)
         
         # LLM response with hallucinated token
         llm_response = "I'll email [EMAIL_1] and CC [EMAIL_2]"
@@ -78,7 +78,7 @@ class TestHallucinationDetection:
         
         loop = PIILoop(detector=MockDetector(entities))
         original = "Alice's email: alice@example.com"
-        redacted, state = loop.redact(original)
+        _, state = loop.redact(original)
         
         # LLM adds extra tokens
         llm_response = "[PERSON_1] ([PERSON_2]) can be reached at [EMAIL_1] or [EMAIL_2]"
@@ -104,12 +104,12 @@ class TestDefaultHallucinationHandler:
     """Test the default hallucination handler."""
     
     @pytest.fixture
-    def handler(self):
+    def handler(self) -> DefaultHallucinationHandler:
         """Create a default handler."""
         return DefaultHallucinationHandler()
     
     @pytest.fixture
-    def sample_state(self):
+    def sample_state(self) -> RedactionState:
         """Create a sample state with tokens."""
         entity1 = PIIEntity(
             type=PIIType.EMAIL,
@@ -146,7 +146,7 @@ class TestDefaultHallucinationHandler:
             }
         )
     
-    def test_handle_exact_hallucination(self, handler, sample_state):
+    def test_handle_exact_hallucination(self, handler: DefaultHallucinationHandler, sample_state: RedactionState) -> None:
         """Test handling a completely unknown token."""
         issue = handler.handle("[PHONE_1]", sample_state, strict=False)
         
@@ -156,7 +156,7 @@ class TestDefaultHallucinationHandler:
         assert issue.replacement is None
         assert issue.confidence == 0.0
     
-    def test_handle_fuzzy_match_typo(self, handler, sample_state):
+    def test_handle_fuzzy_match_typo(self, handler: DefaultHallucinationHandler, sample_state: RedactionState) -> None:
         """Test fuzzy matching for typos."""
         # Simulate typo in token
         issue = handler.handle("[EMIAL_1]", sample_state, strict=False)
@@ -167,7 +167,7 @@ class TestDefaultHallucinationHandler:
         assert issue.replacement == "test@example.com"
         assert issue.confidence > 0.8
     
-    def test_handle_case_variation(self, handler, sample_state):
+    def test_handle_case_variation(self, handler: DefaultHallucinationHandler, sample_state: RedactionState) -> None:
         """Test handling case variations."""
         issue = handler.handle("[email_1]", sample_state, strict=False)
         
@@ -176,7 +176,7 @@ class TestDefaultHallucinationHandler:
         assert issue.replacement == "test@example.com"
         assert issue.confidence > 0.9
     
-    def test_handle_strict_mode(self, handler, sample_state):
+    def test_handle_strict_mode(self, handler: DefaultHallucinationHandler, sample_state: RedactionState) -> None:
         """Test strict mode rejects fuzzy matches."""
         # In strict mode, even close matches are treated as hallucinations
         issue = handler.handle("[EMIAL_1]", sample_state, strict=True)
@@ -185,13 +185,13 @@ class TestDefaultHallucinationHandler:
         assert issue.issue_type == "hallucination"  # Not fuzzy_match
         assert issue.replacement is None
     
-    def test_handle_valid_token(self, handler, sample_state):
+    def test_handle_valid_token(self, handler: DefaultHallucinationHandler, sample_state: RedactionState) -> None:
         """Test that valid tokens return no issue."""
         issue = handler.handle("[EMAIL_1]", sample_state, strict=False)
         
         assert issue is None  # Valid token, no issue
     
-    def test_similarity_threshold(self, handler, sample_state):
+    def test_similarity_threshold(self, handler: DefaultHallucinationHandler, sample_state: RedactionState) -> None:
         """Test similarity threshold for fuzzy matching."""
         # Very different token shouldn't fuzzy match
         issue = handler.handle("[SOMETHING_1]", sample_state, strict=False)

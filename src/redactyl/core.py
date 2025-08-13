@@ -25,6 +25,26 @@ class PIILoop:
         self._use_name_parsing = use_name_parsing
         self._callbacks = callbacks or CallbackContext.with_defaults()
     
+    @property
+    def detector(self) -> PIIDetector:
+        """Get the current detector (for testing purposes)."""
+        return self._detector
+    
+    @detector.setter
+    def detector(self, value: PIIDetector) -> None:
+        """Set a new detector (for testing purposes)."""
+        self._detector = value
+    
+    @property
+    def use_name_parsing(self) -> bool:
+        """Get use_name_parsing setting (for testing purposes)."""
+        return self._use_name_parsing
+    
+    @property
+    def callbacks(self) -> CallbackContext:
+        """Get callbacks (for testing purposes)."""
+        return self._callbacks
+    
     @classmethod
     def from_config(cls, config: "PIIConfig") -> "PIILoop":
         """Create a PIILoop instance from a PIIConfig.

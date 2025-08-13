@@ -11,14 +11,14 @@ class TestBatchRealWorld:
     """Test real-world scenarios with batch detection."""
     
     @pytest.fixture
-    def detector(self):
+    def detector(self) -> PresidioDetector:
         """Create a Presidio detector instance."""
         try:
             return PresidioDetector(confidence_threshold=0.7)
         except Exception as e:
             pytest.skip(f"Presidio not available: {e}")
     
-    def test_customer_support_ticket(self, detector):
+    def test_customer_support_ticket(self, detector: PresidioDetector) -> None:
         """Test a customer support ticket with multiple PII fields."""
         # Simulate a support ticket with various fields
         ticket_fields = {
@@ -87,7 +87,7 @@ class TestBatchRealWorld:
                 for token in tokens:
                     print(f"  {token.token} = '{token.original}'")
     
-    def test_medical_record_scenario(self, detector):
+    def test_medical_record_scenario(self, detector: PresidioDetector) -> None:
         """Test medical record with patient and doctor information."""
         medical_fields = {
             "patient_info": "Patient: James Wilson, DOB: 01/15/1980",
@@ -122,7 +122,7 @@ class TestBatchRealWorld:
         print("Dr. Chen tokens:", chen_tokens)
     
     @pytest.mark.skip(reason="Requires GLiNER for full name detection")
-    def test_email_thread_scenario(self, detector):
+    def test_email_thread_scenario(self, detector: PresidioDetector) -> None:
         """Test email thread with multiple participants."""
         email_thread = {
             "from": "Alice Brown <alice.brown@company.com>",
@@ -168,7 +168,7 @@ class TestBatchRealWorld:
         for field, token, original in alice_tokens:
             print(f"  {field}: {token} = '{original}'")
     
-    def test_performance_with_many_fields(self, detector):
+    def test_performance_with_many_fields(self, detector: PresidioDetector) -> None:
         """Test performance with many fields."""
         # Create 50 fields with various PII
         many_fields = {}

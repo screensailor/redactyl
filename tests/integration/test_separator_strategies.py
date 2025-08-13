@@ -2,21 +2,21 @@
 
 import pytest
 from redactyl.detectors.presidio import PresidioDetector
-from redactyl.types import PIIEntity, PIIType
+from redactyl.types import PIIType
 
 
 class TestSeparatorStrategies:
     """Test various separator strategies for batch PII detection."""
     
     @pytest.fixture
-    def detector(self):
+    def detector(self) -> PresidioDetector:
         """Create a Presidio detector instance."""
         try:
             return PresidioDetector(confidence_threshold=0.7)
         except Exception as e:
             pytest.skip(f"Presidio not available: {e}")
     
-    def test_null_byte_separator(self, detector):
+    def test_null_byte_separator(self, detector: PresidioDetector) -> None:
         """Test using NULL byte as separator."""
         # Test fields
         fields = {
@@ -41,7 +41,7 @@ class TestSeparatorStrategies:
         # Note: With NULL byte separator, Presidio's NER sometimes includes the separator
         # in entity values due to tokenization issues. This is a known limitation.
     
-    def test_zero_width_space_separator(self, detector):
+    def test_zero_width_space_separator(self, detector: PresidioDetector) -> None:
         """Test using zero-width space as separator."""
         fields = {
             "field1": "Email: alice@example.com",
@@ -58,7 +58,7 @@ class TestSeparatorStrategies:
         assert any(e.value == "alice@example.com" for e in entities)
         assert any(e.value == "555-987-6543" for e in entities)
     
-    def test_unicode_private_use_separator(self, detector):
+    def test_unicode_private_use_separator(self, detector: PresidioDetector) -> None:
         """Test using Unicode private use area as separator."""
         fields = {
             "comment": "Bob Smith mentioned his email",
@@ -77,7 +77,7 @@ class TestSeparatorStrategies:
         # Email should still be detected
         assert any(e.value == "bob@example.com" for e in entities)
     
-    def test_newline_sequence_separator(self, detector):
+    def test_newline_sequence_separator(self, detector: PresidioDetector) -> None:
         """Test using newline sequences as separator."""
         fields = {
             "field1": "IP address: 192.168.1.1",
@@ -96,7 +96,7 @@ class TestSeparatorStrategies:
         assert any(e.type == PIIType.URL for e in entities)
         assert any(e.type == PIIType.LOCATION for e in entities)
     
-    def test_separator_in_content(self, detector):
+    def test_separator_in_content(self, detector: PresidioDetector) -> None:
         """Test when separator appears naturally in content."""
         # Use a separator that might appear in content
         separator = " | "
@@ -115,7 +115,7 @@ class TestSeparatorStrategies:
         assert any(e.value == "555-1234" for e in entities)
         assert any(e.value == "Carol Davis" for e in entities)
     
-    def test_unicode_text_with_separators(self, detector):
+    def test_unicode_text_with_separators(self, detector: PresidioDetector) -> None:
         """Test separators with Unicode content including emojis."""
         fields = {
             "field1": "Call José at 555-0123 📞",
@@ -136,7 +136,7 @@ class TestSeparatorStrategies:
             
             assert phone_detected or email_detected, f"Detection failed with separator {repr(separator)}"
     
-    def test_position_mapping_accuracy(self, detector):
+    def test_position_mapping_accuracy(self, detector: PresidioDetector) -> None:
         """Test that entity positions are accurate after combining fields."""
         # Simple fields with known content
         field1 = "John Smith"
@@ -160,7 +160,7 @@ class TestSeparatorStrategies:
             assert email_entity.start == expected_start
             assert email_entity.end == expected_start + len("jane@example.com")
     
-    def test_large_text_performance(self, detector):
+    def test_large_text_performance(self, detector: PresidioDetector) -> None:
         """Test separator strategies with larger text blocks."""
         # Create fields with varying sizes
         fields = {
@@ -179,7 +179,7 @@ class TestSeparatorStrategies:
         assert any("David Miller" in e.value for e in entities)
         assert any(e.value == "987-65-4321" for e in entities)
     
-    def test_recommended_separator_strategy(self, detector):
+    def test_recommended_separator_strategy(self, detector: PresidioDetector) -> None:
         """Test our recommended separator strategy."""
         # Our recommendation: NULL byte for maximum compatibility
         RECOMMENDED_SEPARATOR = "\x00"

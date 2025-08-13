@@ -2,6 +2,7 @@
 
 import sys
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
 import warnings
 
@@ -59,7 +60,7 @@ class TestGLiNEROptional(unittest.TestCase):
             # Create detector with GLiNER requested
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
-                detector = PresidioDetector(use_gliner_for_names=True)
+                _ = PresidioDetector(use_gliner_for_names=True)
                 
                 # Should have warned about GLiNER not being available
                 self.assertTrue(
@@ -74,7 +75,7 @@ class TestGLiNEROptional(unittest.TestCase):
         # Should not try to load GLiNER
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            detector = PresidioDetector(use_gliner_for_names=False)
+            _detector = PresidioDetector(use_gliner_for_names=False)
             
             # Should not have any GLiNER-related warnings
             gliner_warnings = [warning for warning in w 
@@ -82,10 +83,10 @@ class TestGLiNEROptional(unittest.TestCase):
             self.assertEqual(len(gliner_warnings), 0)
             
             # Parser should be None
-            self.assertIsNone(detector._gliner_parser)
+            self.assertIsNone(_detector.gliner_parser)
 
     @patch("redactyl.detectors.gliner_parser.GLiNER")
-    def test_gliner_parser_with_mock_gliner(self, mock_gliner_class):
+    def test_gliner_parser_with_mock_gliner(self, mock_gliner_class: Any) -> None:
         """Test GlinerNameParser with mocked GLiNER."""
         from redactyl.detectors.gliner_parser import GlinerNameParser
         
@@ -113,6 +114,7 @@ class TestGLiNEROptional(unittest.TestCase):
         
         # Should have parsed components
         self.assertIsNotNone(components)
+        assert components is not None  # Type guard for pyright
         self.assertEqual(len(components), 2)
         self.assertEqual(components[0].type, PIIType.NAME_FIRST)
         self.assertEqual(components[0].value, "John")
@@ -131,7 +133,7 @@ class TestGLiNEROptional(unittest.TestCase):
             gliner_module.GLiNER = None
             
             # Clear the cache to ensure fresh initialization
-            gliner_module._clear_gliner_cache()
+            gliner_module.clear_gliner_cache()
             
             try:
                 from redactyl.detectors.gliner_parser import GlinerNameParser

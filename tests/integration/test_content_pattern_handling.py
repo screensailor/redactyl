@@ -10,14 +10,14 @@ class TestContentPatternHandling:
     """Test suite for content pattern handling with double newlines."""
     
     @pytest.fixture
-    def detector(self):
+    def detector(self) -> PresidioDetector:
         """Create a Presidio detector instance."""
         try:
             return PresidioDetector(confidence_threshold=0.7)
         except Exception as e:
             pytest.skip(f"Presidio not available: {e}")
     
-    def test_double_newline_in_content(self, detector):
+    def test_double_newline_in_content(self, detector: PresidioDetector) -> None:
         """Test that double newlines in content don't break detection."""
         # Typical content with double newlines
         fields = {
@@ -72,7 +72,7 @@ sarah.williams@company.com
                     f"expected '{entity.value}', got '{extracted}'"
                 )
     
-    def test_position_tracking_vs_legacy(self, detector):
+    def test_position_tracking_vs_legacy(self, detector: PresidioDetector) -> None:
         """Compare position tracking with legacy boundary marker mode."""
         # Content with potential separator conflicts
         fields = {
@@ -101,7 +101,7 @@ sarah.williams@company.com
                     extracted = field_text[entity.start:entity.end]
                     assert extracted == entity.value
     
-    def test_smart_batch_detector_default(self, detector):
+    def test_smart_batch_detector_default(self, detector: PresidioDetector) -> None:
         """Test that SmartBatchDetector always uses position tracking."""
         # Content with double newlines
         fields = {
@@ -125,7 +125,7 @@ sarah.williams@company.com
             extracted = field_text[entity.start:entity.end]
             assert extracted == entity.value
     
-    def test_empty_fields_handling(self, detector):
+    def test_empty_fields_handling(self, detector: PresidioDetector) -> None:
         """Test handling of empty fields in batch detection."""
         fields = {
             "field1": "John Smith",
@@ -144,7 +144,7 @@ sarah.williams@company.com
         assert "field1" in results or "field3" in results
         assert "field2" not in results  # Empty field should have no entities
     
-    def test_unicode_and_special_chars(self, detector):
+    def test_unicode_and_special_chars(self, detector: PresidioDetector) -> None:
         """Test handling of Unicode and special characters."""
         fields = {
             "field1": "Contact José García at jose@ejemplo.es",
@@ -166,7 +166,7 @@ sarah.williams@company.com
                     f"expected '{entity.value}', got '{extracted}'"
                 )
     
-    def test_no_word_fusion_between_fields(self, detector):
+    def test_no_word_fusion_between_fields(self, detector: PresidioDetector) -> None:
         """Test that field values are not fused together when concatenated."""
         # Fields that end and start with names - potential fusion risk
         fields = {

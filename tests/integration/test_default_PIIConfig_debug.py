@@ -34,7 +34,7 @@ def test_debug_detection():
         phone="(555) 123-4567"
     )
     
-    result = process(user)
+    _ = process(user)  # Result is same as input after round-trip
     
     print("=" * 60)
     print("Debug: What was detected and redacted?")

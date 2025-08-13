@@ -5,7 +5,6 @@ from datetime import datetime
 from pathlib import Path
 import tempfile
 
-import pytest
 from redactyl import PIIEntity, PIILoop, PIIType, RedactionState, RedactionToken
 from redactyl.detectors.mock import MockDetector
 

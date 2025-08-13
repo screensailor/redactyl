@@ -11,7 +11,7 @@ class TestRedactionState:
     """Test RedactionState data structure and serialization."""
     
     @pytest.fixture
-    def sample_entity(self):
+    def sample_entity(self) -> PIIEntity:
         """Create a sample PII entity."""
         return PIIEntity(
             type=PIIType.EMAIL,
@@ -22,7 +22,7 @@ class TestRedactionState:
         )
     
     @pytest.fixture
-    def sample_token(self, sample_entity):
+    def sample_token(self, sample_entity: PIIEntity) -> RedactionToken:
         """Create a sample redaction token."""
         return RedactionToken(
             original="john@example.com",
@@ -39,7 +39,7 @@ class TestRedactionState:
         assert state.metadata == {}
         assert isinstance(state.created_at, datetime)
     
-    def test_create_state_with_tokens(self, sample_token):
+    def test_create_state_with_tokens(self, sample_token: RedactionToken) -> None:
         """Test creating state with initial tokens."""
         tokens = {sample_token.token: sample_token}
         metadata = {"source": "test"}
@@ -52,7 +52,7 @@ class TestRedactionState:
         assert state.tokens == tokens
         assert state.metadata == metadata
     
-    def test_state_immutability(self, sample_token):
+    def test_state_immutability(self, sample_token: RedactionToken) -> None:
         """Test that RedactionState is immutable."""
         state = RedactionState(
             tokens={sample_token.token: sample_token}
@@ -60,17 +60,17 @@ class TestRedactionState:
         
         # Test token dict immutability
         with pytest.raises(AttributeError):
-            state.tokens = {}
+            state.tokens = {}  # type: ignore[misc]
         
         # Test metadata immutability
         with pytest.raises(AttributeError):
-            state.metadata = {"new": "data"}
+            state.metadata = {"new": "data"}  # type: ignore[misc]
         
         # Test created_at immutability
         with pytest.raises(AttributeError):
-            state.created_at = datetime.now()
+            state.created_at = datetime.now()  # type: ignore[misc]
     
-    def test_redaction_token_generation(self, sample_entity):
+    def test_redaction_token_generation(self, sample_entity: PIIEntity) -> None:
         """Test RedactionToken token generation."""
         token = RedactionToken(
             original="test@example.com",
@@ -96,7 +96,7 @@ class TestRedactionState:
         
         assert name_token.token == "[NAME_FIRST_1]"
     
-    def test_serialization_to_dict(self, sample_token):
+    def test_serialization_to_dict(self, sample_token: RedactionToken) -> None:
         """Test serializing state to dictionary."""
         state = RedactionState(
             tokens={sample_token.token: sample_token},
@@ -112,7 +112,7 @@ class TestRedactionState:
         assert data["metadata"]["version"] == "1.0"
         assert "created_at" in data
     
-    def test_deserialization_from_dict(self, sample_token):
+    def test_deserialization_from_dict(self, sample_token: RedactionToken) -> None:
         """Test deserializing state from dictionary."""
         original_state = RedactionState(
             tokens={sample_token.token: sample_token},
@@ -128,7 +128,7 @@ class TestRedactionState:
         assert restored_state.metadata["test"] is True
         assert restored_state.created_at == original_state.created_at
     
-    def test_json_serialization(self, sample_token):
+    def test_json_serialization(self, sample_token: RedactionToken) -> None:
         """Test JSON serialization and deserialization."""
         state = RedactionState(
             tokens={sample_token.token: sample_token},
@@ -147,7 +147,7 @@ class TestRedactionState:
         assert restored.tokens.keys() == state.tokens.keys()
         assert restored.metadata == state.metadata
     
-    def test_with_token_immutable_update(self, sample_token):
+    def test_with_token_immutable_update(self, sample_token: RedactionToken) -> None:
         """Test immutable token addition."""
         state1 = RedactionState()
         

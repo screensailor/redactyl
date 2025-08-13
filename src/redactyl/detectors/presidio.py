@@ -88,6 +88,11 @@ class PresidioDetector(BaseDetector):
                 self.callbacks.trigger_gliner_unavailable()
                 self._gliner_parser = None
 
+    @property
+    def gliner_parser(self) -> "GlinerNameParser | None":
+        """Get the GLiNER parser instance (for testing purposes)."""
+        return self._gliner_parser
+
     def detect(self, text: str) -> list[PIIEntity]:
         """Detect PII entities in text using Presidio."""
         if not text:
