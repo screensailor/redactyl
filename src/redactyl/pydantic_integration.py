@@ -85,6 +85,39 @@ class HallucinationResponse:
         return cls(action=HallucinationAction.IGNORE)
 
 
+# Module-level cache for the default detector to avoid reloading spaCy
+_DEFAULT_DETECTOR: PIIDetector | None = None
+
+
+def _get_default_detector() -> PIIDetector:
+    """Get or create the default detector with caching to avoid reloading spaCy."""
+    global _DEFAULT_DETECTOR
+    if _DEFAULT_DETECTOR is None:
+        from redactyl.detectors.presidio import PresidioDetector
+        _DEFAULT_DETECTOR = PresidioDetector(
+            use_gliner_for_names=False,
+            language="en",
+            supported_entities=[
+                "PERSON",
+                "EMAIL_ADDRESS",
+                "PHONE_NUMBER",
+                "LOCATION",
+                "CREDIT_CARD",
+                "IP_ADDRESS",
+                "FIRST_NAME",
+                "MIDDLE_NAME",
+                "LAST_NAME",
+            ]
+        )
+    return _DEFAULT_DETECTOR
+
+
+def _clear_default_detector_cache() -> None:
+    """Clear the cached default detector. Useful for tests that need isolation."""
+    global _DEFAULT_DETECTOR
+    _DEFAULT_DETECTOR = None
+
+
 class PIIConfig:
     """Configuration for PII protection with clean decorator API."""
 
@@ -114,7 +147,7 @@ class PIIConfig:
 
         Args:
             detector: PII detector to use. If None, creates a default PresidioDetector
-                     with GLiNER enabled for name detection
+                     with nameparser for name component detection
             batch_detection: Whether to use batch detection for efficiency
             use_name_parsing: Whether to parse name components
             fuzzy_unredaction: Whether to allow fuzzy matching during unredaction
@@ -168,12 +201,8 @@ class PIIConfig:
             ```
         """
         if detector is None:
-            # Create default PresidioDetector with GLiNER enabled
-            from redactyl.detectors.presidio import PresidioDetector
-            detector = PresidioDetector(
-                use_gliner_for_names=True,
-                language="en",
-            )
+            # Use cached default detector to avoid reloading spaCy
+            detector = _get_default_detector()
 
         self.detector = detector
         self.batch_detection = batch_detection

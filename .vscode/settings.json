@@ -1,3 +1,12 @@
 {
-  "python-envs.pythonProjects": []
+  "python-envs.pythonProjects": [],
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "tests",
+    "--no-cov",
+    "-v",
+    "--ignore=tests/experiments"
+  ],
+  "python.testing.cwd": "${workspaceFolder}"
 }

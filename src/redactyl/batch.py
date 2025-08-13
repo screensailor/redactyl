@@ -121,10 +121,32 @@ class BatchDetector:
         """
         Build composite text using position-based tracking.
 
-        This approach uses a single newline separator between fields to prevent
-        word fusion while relying on position tracking to map entities back.
-        Single newlines are common in text and won't interfere with detection.
+        This approach uses a pilcrow-based separator (\n¶¶\n) between fields to prevent
+        word fusion and ensure name parsers don't treat adjacent fields as
+        continuous text. The newlines create paragraph breaks that NLP tools respect,
+        while the pilcrows provide a clear, visible boundary that's unlikely to
+        appear in natural text.
+        
+        Raises:
+            BatchDetectionError: If any field contains the separator sequence
         """
+        FIELD_SEPARATOR = "\n¶¶\n"
+        
+        # Check if separator exists in any field
+        fields_with_separator = [
+            path for path, value in fields.items() 
+            if FIELD_SEPARATOR in value
+        ]
+        
+        if fields_with_separator:
+            from redactyl.exceptions import BatchDetectionError
+            raise BatchDetectionError(
+                f"Field separator '{repr(FIELD_SEPARATOR)}' found in input fields",
+                failed_fields=fields_with_separator,
+                separator_issue=True,
+                original_error=None,
+            )
+        
         composite_parts: list[str] = []
         current_pos = 0
 
@@ -133,10 +155,11 @@ class BatchDetector:
             if not value:
                 continue
 
-            # Add newline separator between fields (not before first)
+            # Add field separator between fields (not before first)
+            # This ensures names at field boundaries aren't merged
             if idx > 0 and composite_parts:
-                composite_parts.append("\n")
-                current_pos += 1
+                composite_parts.append(FIELD_SEPARATOR)
+                current_pos += len(FIELD_SEPARATOR)
 
             # Track field info
             field_infos.append(
@@ -198,8 +221,12 @@ class BatchDetector:
         Map detected entities back to their original fields.
 
         Handles edge cases like entities spanning field boundaries.
+        Preserves original field order for consistent entity numbering.
         """
-        result: dict[str, list[PIIEntity]] = {}
+        # Pre-populate result with field paths in original order
+        result: dict[str, list[PIIEntity]] = {
+            field_info.path: [] for field_info in field_infos
+        }
         unmapped_entities: list[PIIEntity] = []
 
         for entity in all_entities:
@@ -227,9 +254,7 @@ class BatchDetector:
                         # Entity extends beyond field - shouldn't happen
                         continue
 
-                    # Add to results
-                    if field_info.path not in result:
-                        result[field_info.path] = []
+                    # Add to results (field already exists in result dict)
                     result[field_info.path].append(adjusted_entity)
                     mapped = True
                     break

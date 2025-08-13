@@ -2,16 +2,16 @@ from redactyl.detectors.presidio import PresidioDetector
 from redactyl.pydantic_integration import PIIConfig
 
 
-def test_default_config(default_pii_config: PIIConfig):
-    # Use the fixture instead of creating a new PIIConfig
-    pii = default_pii_config
+def test_default_config():
+    # Create a default PIIConfig
+    pii = PIIConfig()
 
     # Verify detector is created and is a PresidioDetector
     assert pii.detector is not None
     assert isinstance(pii.detector, PresidioDetector)
 
     # Verify PresidioDetector settings
-    assert pii.detector.use_gliner_for_names is True
+    assert pii.detector.use_gliner_for_names is False  # Changed default to nameparser
     assert pii.detector.language == "en"
     assert pii.detector.confidence_threshold == 0.7  # Default confidence
 

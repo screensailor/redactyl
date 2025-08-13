@@ -776,7 +776,7 @@ class TestPIIConfigDecorator:
         from redactyl.detectors.presidio import PresidioDetector
         assert config.detector is not None
         assert isinstance(config.detector, PresidioDetector)
-        assert config.detector.use_gliner_for_names is True
+        assert config.detector.use_gliner_for_names is False  # Changed default from GLiNER to nameparser
         
         # Test that it works
         @config.protect

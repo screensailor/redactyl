@@ -6,8 +6,8 @@ of direct logging or printing.
 """
 
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from redactyl.types import PIIEntity, UnredactionIssue
 

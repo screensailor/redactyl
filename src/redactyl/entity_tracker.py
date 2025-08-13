@@ -80,10 +80,10 @@ class GlobalEntityTracker:
         unique_entities: list[PIIEntity] = []
         seen_values: dict[tuple[PIIType, str], PIIEntity] = {}
 
-        # Collect all entities, sorting fields by depth (top-level first)
+        # Collect all entities, preserving document order (don't sort alphabetically!)
+        # The fields should already be in document order from model iteration
         all_entities: list[tuple[str, PIIEntity]] = []
-        sorted_fields = sorted(entities_by_field.keys(), key=lambda x: (x.count('.'), x))
-        for field_path in sorted_fields:
+        for field_path in entities_by_field.keys():
             entities = entities_by_field[field_path]
             for entity in entities:
                 all_entities.append((field_path, entity))

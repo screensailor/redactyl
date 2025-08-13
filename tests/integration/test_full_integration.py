@@ -26,8 +26,8 @@ class Output(BaseModel):
     nested: NestedOutput
 
 
-def test_redaction(default_pii_config: PIIConfig):
-    pii = default_pii_config
+def test_redaction():
+    pii = PIIConfig()
 
     x = Input(
         ignore=1,

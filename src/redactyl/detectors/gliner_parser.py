@@ -9,15 +9,16 @@ to `None` so tests and downstream code can patch or inspect availability via
 dependency.
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-import warnings
 
 if TYPE_CHECKING:
     from redactyl.callbacks import CallbackContext
 
-from redactyl.types import PIIEntity, PIIType
 import sys
+
+from redactyl.types import PIIEntity, PIIType
 
 # Optional import: expose a module-level GLiNER symbol for patching/tests
 try:  # pragma: no cover - exercised via unit tests

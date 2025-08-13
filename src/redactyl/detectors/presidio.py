@@ -144,7 +144,7 @@ class PresidioDetector(BaseDetector):
                     # Look for a following capitalized word immediately after
                     m = re.match(r"\s+([A-Z][a-z]+)\b", text[e.end : e.end + 32])
                     if m:
-                        last = m.group(1)
+                        # Found last name after first name
                         start = e.start
                         end = e.end + m.end(1)
                         full = text[start:end]
@@ -195,19 +195,21 @@ class PresidioDetector(BaseDetector):
                     )
                 )
 
-            for m in ssn_pattern.finditer(text):
-                start, end = m.start(1), m.end(1)
-                if (start, end) in existing_spans:
-                    continue
-                entities.append(
-                    PIIEntity(
-                        type=PIIType.SSN,
-                        value=text[start:end],
-                        start=start,
-                        end=end,
-                        confidence=0.9,
+            # Only add SSN if it's in supported entities
+            if "US_SSN" in self.supported_entities or "US_ITIN" in self.supported_entities:
+                for m in ssn_pattern.finditer(text):
+                    start, end = m.start(1), m.end(1)
+                    if (start, end) in existing_spans:
+                        continue
+                    entities.append(
+                        PIIEntity(
+                            type=PIIType.SSN,
+                            value=text[start:end],
+                            start=start,
+                            end=end,
+                            confidence=0.9,
+                        )
                     )
-                )
         except Exception:
             pass
 

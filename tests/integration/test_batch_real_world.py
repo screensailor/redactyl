@@ -121,6 +121,7 @@ class TestBatchRealWorld:
         
         print("Dr. Chen tokens:", chen_tokens)
     
+    @pytest.mark.skip(reason="Requires GLiNER for full name detection")
     def test_email_thread_scenario(self, detector):
         """Test email thread with multiple participants."""
         email_thread = {
