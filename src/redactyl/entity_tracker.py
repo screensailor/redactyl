@@ -38,6 +38,9 @@ class GlobalEntityTracker:
         self._token_counters: dict[str, int] = {}
         # Persistent names map: full normalized values and component words -> shared index
         self._name_index_by_value: dict[str, int] = {}
+        # Persistent mapping from last-name (normalized) -> first-name (normalized)
+        # Established from authoritative "First Last" phrases.
+        self._last_to_first: dict[str, str] = {}
         # Simple lock for concurrent access safety
         self._lock = threading.Lock()
 
@@ -53,6 +56,29 @@ class GlobalEntityTracker:
         Returns:
             Mapping of field paths to assigned redaction tokens
         """
+        # Pre-scan: Build authoritative mapping from full-name occurrences
+        with self._lock:
+            for _, entities in entities_by_field.items():
+                recent_first: PIIEntity | None = None
+                for e in entities:
+                    if e.type == PIIType.NAME_FIRST:
+                        recent_first = e
+                    elif e.type == PIIType.NAME_LAST:
+                        if recent_first is not None:
+                            gap = e.start - recent_first.end
+                            if 0 <= gap <= 2:
+                                first_norm = self._normalize_value(recent_first.value)
+                                last_norm = self._normalize_value(e.value)
+                                # Only set if not already mapped to avoid flip-flops
+                                self._last_to_first.setdefault(last_norm, first_norm)
+                        # End of a "first ... last" phrase
+                        recent_first = None
+                    elif e.type in {PIIType.NAME_MIDDLE, PIIType.NAME_TITLE}:
+                        # Keep recent_first
+                        pass
+                    else:
+                        recent_first = None
+        
         # First pass: collect all unique entities
         unique_entities = self._deduplicate_entities(entities_by_field)
 
@@ -221,6 +247,8 @@ class GlobalEntityTracker:
         with self._lock:
             if "NAME" not in self._token_counters:
                 self._token_counters["NAME"] = 0
+            # Track last name component to group contiguous mentions
+            last_name_entity: PIIEntity | None = None
             
             for entity in entities:
                 normalized = norm(entity.value)
@@ -236,6 +264,27 @@ class GlobalEntityTracker:
                             if w and w in self._name_index_by_value:
                                 idx = self._name_index_by_value[w]
                                 break
+                    
+                    # If still no index, consider contiguous component grouping
+                    # Reuse previous name index when components are adjacent (same phrase)
+                    if idx is None and last_name_entity is not None:
+                        gap = entity.start - last_name_entity.end
+                        if 0 <= gap <= 2:
+                            prev_token = entity_to_token.get(last_name_entity)
+                            if prev_token is not None:
+                                idx = prev_token.token_index
+                    
+                    # If still no index and we saw a full-name mapping last->first,
+                    # tie this last name to that first name's index.
+                    if idx is None and entity.type == PIIType.NAME_LAST:
+                        mapped_first = self._last_to_first.get(normalized)
+                        if mapped_first is not None:
+                            # Reuse first's index if seen; otherwise allocate and register both
+                            idx = self._name_index_by_value.get(mapped_first)
+                            if idx is None:
+                                self._token_counters["NAME"] += 1
+                                idx = self._token_counters["NAME"]
+                                self._register_name_value_indices(mapped_first, idx)
                     
                     # If still no index, create a new one
                     if idx is None:
@@ -253,6 +302,8 @@ class GlobalEntityTracker:
                     )
                     entity_to_token[entity] = token
                     self._entity_map[(entity.type, normalized)] = token
+                    # Continue current name group
+                    last_name_entity = entity
                     
                 else:
                     # Non-name entities
@@ -281,6 +332,8 @@ class GlobalEntityTracker:
                         )
                         entity_to_token[entity] = token
                         self._entity_map[key] = token
+                    # Reset current name group on non-name
+                    last_name_entity = None
         
         return entity_to_token
 

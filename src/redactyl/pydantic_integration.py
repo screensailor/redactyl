@@ -4,7 +4,7 @@ import asyncio
 import functools
 import inspect
 import warnings
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, TypeVar, cast
@@ -436,19 +436,24 @@ class PIIConfig:
                             protected_args.append(param_value)
             
             # Call the async generator with protected arguments
-            async for item in func(*protected_args, **protected_kwargs):
-                if isinstance(item, BaseModel):
-                    # Protect the yielded model to redact its PII
-                    protected_item, item_state = protector.protect_model(item)
-                    
-                    # Merge the state from this yield into accumulated state
-                    accumulated_state = accumulated_state.merge(item_state)
-                    
-                    # Yield the protected (redacted) model
-                    yield protected_item
-                else:
-                    # Pass through non-model items
-                    yield item
+            try:
+                async for item in func(*protected_args, **protected_kwargs):
+                    if isinstance(item, BaseModel):
+                        # Protect the yielded model to redact its PII
+                        protected_item, item_state = protector.protect_model(item)
+                        
+                        # Merge the state from this yield into accumulated state
+                        accumulated_state = accumulated_state.merge(item_state)
+                        
+                        # Yield the protected (redacted) model
+                        yield protected_item
+                    else:
+                        # Pass through non-model items
+                        yield item
+            finally:
+                # Notify completion with accumulated state
+                if callable(self.on_stream_complete):
+                    self.on_stream_complete(accumulated_state)
         
         return async_gen_wrapper
 
@@ -562,19 +567,24 @@ class PIIConfig:
                             protected_args.append(param_value)
             
             # Call the generator with protected arguments
-            for item in func(*protected_args, **protected_kwargs):
-                if isinstance(item, BaseModel):
-                    # Protect the yielded model to redact its PII
-                    protected_item, item_state = protector.protect_model(item)
-                    
-                    # Merge the state from this yield into accumulated state
-                    accumulated_state = accumulated_state.merge(item_state)
-                    
-                    # Yield the protected (redacted) model
-                    yield protected_item
-                else:
-                    # Pass through non-model items
-                    yield item
+            try:
+                for item in func(*protected_args, **protected_kwargs):
+                    if isinstance(item, BaseModel):
+                        # Protect the yielded model to redact its PII
+                        protected_item, item_state = protector.protect_model(item)
+                        
+                        # Merge the state from this yield into accumulated state
+                        accumulated_state = accumulated_state.merge(item_state)
+                        
+                        # Yield the protected (redacted) model
+                        yield protected_item
+                    else:
+                        # Pass through non-model items
+                        yield item
+            finally:
+                # Notify completion with accumulated state
+                if callable(self.on_stream_complete):
+                    self.on_stream_complete(accumulated_state)
         
         return gen_wrapper
 
@@ -654,11 +664,19 @@ class PIIConfig:
 
                     model_idx += 1
                 else:
-                    # Pass through non-model arguments
-                    if param_name in bound.kwargs:
-                        protected_kwargs[param_name] = param_value
+                    # Pass through or protect non-model arguments
+                    if self.traverse_containers:
+                        new_val, st = protector.protect_any(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = new_val
+                        else:
+                            protected_args.append(new_val)
+                        accumulated_state = accumulated_state.merge(st)
                     else:
-                        protected_args.append(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = param_value
+                        else:
+                            protected_args.append(param_value)
         else:
             # Process arguments individually
             for param_name, param_value in bound.arguments.items():
@@ -675,11 +693,19 @@ class PIIConfig:
                     # Accumulate state
                     accumulated_state = accumulated_state.merge(state)
                 else:
-                    # Pass through non-model arguments
-                    if param_name in bound.kwargs:
-                        protected_kwargs[param_name] = param_value
+                    # Pass through or protect non-model arguments
+                    if self.traverse_containers:
+                        new_val, st = protector.protect_any(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = new_val
+                        else:
+                            protected_args.append(new_val)
+                        accumulated_state = accumulated_state.merge(st)
                     else:
-                        protected_args.append(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = param_value
+                        else:
+                            protected_args.append(param_value)
 
         # Call the async function with protected arguments
         result = await func(*protected_args, **protected_kwargs)
@@ -715,7 +741,60 @@ class PIIConfig:
 
             return unprotected_result
         else:
-            return result
+            # Non-BaseModel return
+            if self.traverse_containers:
+                return self._unprotect_and_handle_hallucinations(result, protector, accumulated_state)
+            else:
+                return result
+
+    def _unprotect_and_handle_hallucinations(
+        self,
+        result: Any,
+        protector: "PydanticPIIProtector",
+        accumulated_state: RedactionState,
+    ) -> Any:
+        """Helper to unprotect container results and handle hallucinations."""
+        unprotected, issues = protector.unprotect_any(result, accumulated_state)
+
+        if not issues:
+            return unprotected
+
+        if self.on_hallucination:
+            responses = self.on_hallucination(issues)
+            if len(responses) != len(issues):
+                raise ValueError(
+                    f"Mismatch between issues ({len(issues)}) and responses ({len(responses)})"
+                )
+
+            # Build replacements map from responses
+            replacements: dict[str, str | None] = {}
+            for issue, response in zip(issues, responses, strict=False):
+                if response.action == HallucinationAction.THROW:
+                    raise HallucinationError([issue])
+                if response.action == HallucinationAction.PRESERVE:
+                    continue
+                if response.action == HallucinationAction.REPLACE:
+                    replacements[issue.token] = response.replacement_text or ""
+                if response.action == HallucinationAction.IGNORE:
+                    replacements[issue.token] = ""
+
+            if replacements:
+                unprotected = protector._apply_replacements_to_any(unprotected, replacements)
+            return unprotected
+
+        # Default: route to per-issue handler or warn
+        if self.on_unredaction_issue is not None and callable(self.on_unredaction_issue):
+            for issue in issues:
+                self.on_unredaction_issue(issue)
+        else:
+            for issue in issues:
+                warnings.warn(
+                    f"PII unredaction issue: {issue.token} - {issue.issue_type}"
+                    + (f" ({issue.details})" if issue.details else ""),
+                    UserWarning,
+                    stacklevel=3,
+                )
+        return unprotected
 
     def _process_with_protection_sync(
         self,
@@ -793,11 +872,19 @@ class PIIConfig:
 
                     model_idx += 1
                 else:
-                    # Pass through non-model arguments
-                    if param_name in bound.kwargs:
-                        protected_kwargs[param_name] = param_value
+                    # Pass through or protect non-model arguments
+                    if self.traverse_containers:
+                        new_val, st = protector.protect_any(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = new_val
+                        else:
+                            protected_args.append(new_val)
+                        accumulated_state = accumulated_state.merge(st)
                     else:
-                        protected_args.append(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = param_value
+                        else:
+                            protected_args.append(param_value)
         else:
             # Process arguments individually
             for param_name, param_value in bound.arguments.items():
@@ -814,11 +901,19 @@ class PIIConfig:
                     # Accumulate state
                     accumulated_state = accumulated_state.merge(state)
                 else:
-                    # Pass through non-model arguments
-                    if param_name in bound.kwargs:
-                        protected_kwargs[param_name] = param_value
+                    # Pass through or protect non-model arguments
+                    if self.traverse_containers:
+                        new_val, st = protector.protect_any(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = new_val
+                        else:
+                            protected_args.append(new_val)
+                        accumulated_state = accumulated_state.merge(st)
                     else:
-                        protected_args.append(param_value)
+                        if param_name in bound.kwargs:
+                            protected_kwargs[param_name] = param_value
+                        else:
+                            protected_args.append(param_value)
 
         # Call the sync function with protected arguments
         result = func(*protected_args, **protected_kwargs)
@@ -854,7 +949,11 @@ class PIIConfig:
 
             return unprotected_result
         else:
-            return result
+            # Non-BaseModel return
+            if self.traverse_containers:
+                return self._unprotect_and_handle_hallucinations(result, protector, accumulated_state)
+            else:
+                return result
 
     def _apply_hallucination_responses(
         self,
@@ -1427,7 +1526,8 @@ class PydanticPIIProtector:
                 new_v, st = self.protect_any(v)
                 out[k] = new_v
                 state = state.merge(st)
-            return type(value)(out), state
+            # Return a plain dict to avoid constructing unknown Mapping types
+            return out, state
         if isinstance(value, tuple):
             items: list[Any] = []
             state = RedactionState()
@@ -1445,6 +1545,16 @@ class PydanticPIIProtector:
                 state = state.merge(st)
             return items, state
         if isinstance(value, set):
+            # Batch-protect pure string sets to avoid dedup from identical tokens
+            if value and all(isinstance(v, str) for v in value):
+                # Use a stable order for batch protection
+                seq = sorted(value)
+                fields = {f"item_{i}": s for i, s in enumerate(seq)}
+                # Force batch-based protection to ensure distinct tokens
+                protected_map, st = self._batch_protect(fields)
+                protected_seq = [protected_map[f"item_{i}"] for i in range(len(seq))]
+                return set(protected_seq), st
+            # General recursive case for mixed types
             items_set: set[Any] = set()
             state = RedactionState()
             for v in value:
@@ -1453,6 +1563,13 @@ class PydanticPIIProtector:
                 state = state.merge(st)
             return items_set, state
         if isinstance(value, frozenset):
+            # Batch-protect pure string frozensets as well
+            if value and all(isinstance(v, str) for v in value):
+                seq = sorted(value)
+                fields = {f"item_{i}": s for i, s in enumerate(seq)}
+                protected_map, st = self._batch_protect(fields)
+                protected_seq = [protected_map[f"item_{i}"] for i in range(len(seq))]
+                return frozenset(protected_seq), st
             tmp: set[Any] = set()
             state = RedactionState()
             for v in value:
@@ -1481,7 +1598,8 @@ class PydanticPIIProtector:
                 new_v, isss = self.unprotect_any(v, state)
                 out[k] = new_v
                 issues.extend(isss)
-            return type(value)(out), issues
+            # Return a plain dict to avoid constructing unknown Mapping types
+            return out, issues
         if isinstance(value, tuple):
             items: list[Any] = []
             for v in value:
