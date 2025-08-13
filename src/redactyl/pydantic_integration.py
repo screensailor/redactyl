@@ -4,7 +4,7 @@ import asyncio
 import functools
 import inspect
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, TypeVar, cast
@@ -23,6 +23,7 @@ from redactyl.types import (
     RedactionToken,
     UnredactionIssue,
 )
+from redactyl.utils import filter_overlapping_tokens
 
 
 # Sentinel value to distinguish unset from None
@@ -143,6 +144,8 @@ class PIIConfig:
         on_gliner_model_error: Callable[[str, Exception], None]
         | None
         | UnsetType = UNSET,
+        traverse_containers: bool = True,
+        on_stream_complete: Callable[[RedactionState], None] | None = None,
     ):
         """
         Initialize PII configuration.
@@ -174,6 +177,11 @@ class PIIConfig:
                                   Receives model name and exception.
                                   None (default): use warnings.warn
                                   Callable: custom callback
+            traverse_containers: Whether to traverse and protect containers of models
+                               (list, dict, tuple, set, frozenset). Default: True
+            on_stream_complete: Callback invoked when streaming completes, receiving
+                              the accumulated RedactionState. Useful for retrieving
+                              state after streaming for later unredaction.
 
         Example:
             ```python
@@ -273,6 +281,9 @@ class PIIConfig:
         else:
             # Custom callback
             self.on_gliner_model_error = on_gliner_model_error
+        
+        self.traverse_containers = traverse_containers
+        self.on_stream_complete = on_stream_complete
 
     def protect(self, func: F) -> F:
         """
@@ -354,6 +365,7 @@ class PIIConfig:
                 batch_detection=self.batch_detection,
                 use_name_parsing=self.use_name_parsing,
                 fuzzy_unredaction=self.fuzzy_unredaction,
+                traverse_containers=self.traverse_containers,
                 callbacks=callbacks,
             )
             
@@ -479,6 +491,7 @@ class PIIConfig:
                 batch_detection=self.batch_detection,
                 use_name_parsing=self.use_name_parsing,
                 fuzzy_unredaction=self.fuzzy_unredaction,
+                traverse_containers=self.traverse_containers,
                 callbacks=callbacks,
             )
             
@@ -596,6 +609,7 @@ class PIIConfig:
             batch_detection=self.batch_detection,
             use_name_parsing=self.use_name_parsing,
             fuzzy_unredaction=self.fuzzy_unredaction,
+            traverse_containers=self.traverse_containers,
             callbacks=callbacks,
         )
 
@@ -734,6 +748,7 @@ class PIIConfig:
             batch_detection=self.batch_detection,
             use_name_parsing=self.use_name_parsing,
             fuzzy_unredaction=self.fuzzy_unredaction,
+            traverse_containers=self.traverse_containers,
             callbacks=callbacks,
         )
 
@@ -979,6 +994,7 @@ class PydanticPIIProtector:
         batch_detection: bool = True,
         use_name_parsing: bool = True,
         fuzzy_unredaction: bool = False,
+        traverse_containers: bool = True,
         callbacks: "CallbackContext | None" = None,
     ):
         """
@@ -989,12 +1005,14 @@ class PydanticPIIProtector:
             batch_detection: Whether to use batch detection for efficiency
             use_name_parsing: Whether to parse name components
             fuzzy_unredaction: Whether to allow fuzzy matching during unredaction
+            traverse_containers: Whether to traverse and protect containers of models
             callbacks: Callback context for event handling
         """
         self.detector = detector
         self.batch_detection = batch_detection
         self.use_name_parsing = use_name_parsing
         self.fuzzy_unredaction = fuzzy_unredaction
+        self.traverse_containers = traverse_containers
 
         if callbacks is None:
             callbacks = CallbackContext.with_defaults()
@@ -1389,30 +1407,134 @@ class PydanticPIIProtector:
         entities like 'john.smith@example.com' which may be detected as both
         EMAIL and multiple URL fragments.
         """
-        if not tokens:
-            return []
-        
-        # Sort by start position, then by length (descending), then by confidence (descending)
-        # This prefers longer, more specific entities over shorter ones
-        sorted_tokens = sorted(
-            tokens, 
-            key=lambda t: (
-                t.entity.start, 
-                -(t.entity.end - t.entity.start), 
-                -t.entity.confidence
-            )
-        )
-        
-        filtered: list[RedactionToken] = []
-        last_end = -1
-        
-        for token in sorted_tokens:
-            # Skip if this token overlaps with a previously selected one
-            if token.entity.start >= last_end:
-                filtered.append(token)
-                last_end = token.entity.end
-        
-        return filtered
+        return filter_overlapping_tokens(tokens)
+    
+    # Container-aware helpers
+    def protect_any(self, value: Any) -> tuple[Any, RedactionState]:
+        """Protect any value, traversing containers if enabled."""
+        if isinstance(value, BaseModel):
+            return self.protect_model(value)
+        if isinstance(value, str):
+            # Redact raw strings directly
+            redacted, state = self.redactyl.redact(value)
+            return redacted, state
+        if value is None:
+            return value, RedactionState()
+        if isinstance(value, Mapping):
+            out: dict[Any, Any] = {}
+            state = RedactionState()
+            for k, v in value.items():
+                new_v, st = self.protect_any(v)
+                out[k] = new_v
+                state = state.merge(st)
+            return type(value)(out), state
+        if isinstance(value, tuple):
+            items: list[Any] = []
+            state = RedactionState()
+            for v in value:
+                new_v, st = self.protect_any(v)
+                items.append(new_v)
+                state = state.merge(st)
+            return tuple(items), state
+        if isinstance(value, list):
+            items: list[Any] = []
+            state = RedactionState()
+            for v in value:
+                new_v, st = self.protect_any(v)
+                items.append(new_v)
+                state = state.merge(st)
+            return items, state
+        if isinstance(value, set):
+            items_set: set[Any] = set()
+            state = RedactionState()
+            for v in value:
+                new_v, st = self.protect_any(v)
+                items_set.add(new_v)
+                state = state.merge(st)
+            return items_set, state
+        if isinstance(value, frozenset):
+            tmp: set[Any] = set()
+            state = RedactionState()
+            for v in value:
+                new_v, st = self.protect_any(v)
+                tmp.add(new_v)
+                state = state.merge(st)
+            return frozenset(tmp), state
+        return value, RedactionState()
+    
+    def unprotect_any(
+        self, value: Any, state: RedactionState
+    ) -> tuple[Any, list[UnredactionIssue]]:
+        """Unprotect any value, traversing containers if enabled."""
+        if isinstance(value, BaseModel):
+            return self.unprotect_model(value, state)
+        if isinstance(value, str):
+            # Unredact raw strings using loop
+            unred, issues = self.redactyl.unredact(value, state, fuzzy=self.fuzzy_unredaction)
+            return unred, issues
+        if value is None:
+            return value, []
+        issues: list[UnredactionIssue] = []
+        if isinstance(value, Mapping):
+            out: dict[Any, Any] = {}
+            for k, v in value.items():
+                new_v, isss = self.unprotect_any(v, state)
+                out[k] = new_v
+                issues.extend(isss)
+            return type(value)(out), issues
+        if isinstance(value, tuple):
+            items: list[Any] = []
+            for v in value:
+                new_v, isss = self.unprotect_any(v, state)
+                items.append(new_v)
+                issues.extend(isss)
+            return tuple(items), issues
+        if isinstance(value, list):
+            items: list[Any] = []
+            for v in value:
+                new_v, isss = self.unprotect_any(v, state)
+                items.append(new_v)
+                issues.extend(isss)
+            return items, issues
+        if isinstance(value, set):
+            tmp: set[Any] = set()
+            for v in value:
+                new_v, isss = self.unprotect_any(v, state)
+                tmp.add(new_v)
+                issues.extend(isss)
+            return tmp, issues
+        if isinstance(value, frozenset):
+            tmp: set[Any] = set()
+            for v in value:
+                new_v, isss = self.unprotect_any(v, state)
+                tmp.add(new_v)
+                issues.extend(isss)
+            return frozenset(tmp), issues
+        return value, issues
+    
+    def _apply_replacements_to_any(
+        self, data: Any, replacements: dict[str, str | None]
+    ) -> Any:
+        """Apply token replacements to any data structure."""
+        if isinstance(data, str):
+            new_value = data
+            for token, replacement in replacements.items():
+                if replacement is not None and token in new_value:
+                    new_value = new_value.replace(token, replacement)
+            return new_value
+        if isinstance(data, dict):
+            return {
+                k: self._apply_replacements_to_any(v, replacements) for k, v in data.items()
+            }
+        if isinstance(data, list):
+            return [self._apply_replacements_to_any(v, replacements) for v in data]
+        if isinstance(data, tuple):
+            return tuple(self._apply_replacements_to_any(v, replacements) for v in data)
+        if isinstance(data, set):
+            return {self._apply_replacements_to_any(v, replacements) for v in data}
+        if isinstance(data, frozenset):
+            return frozenset(self._apply_replacements_to_any(v, replacements) for v in data)
+        return data
 
 
 # Export public API

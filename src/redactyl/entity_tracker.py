@@ -1,5 +1,6 @@
 """Entity tracking for consistent token assignment across fields."""
 
+import threading
 from dataclasses import dataclass
 
 from redactyl.types import PIIEntity, PIIType, RedactionToken
@@ -31,8 +32,14 @@ class GlobalEntityTracker:
             fuzzy_threshold: Minimum similarity for fuzzy matching (0.0-1.0)
         """
         self.fuzzy_threshold = fuzzy_threshold
+        # Persistent mapping of exact (type, normalized_value) -> token
         self._entity_map: dict[tuple[PIIType, str], RedactionToken] = {}
+        # Persistent counters per type name and for names under key 'NAME'
         self._token_counters: dict[str, int] = {}
+        # Persistent names map: full normalized values and component words -> shared index
+        self._name_index_by_value: dict[str, int] = {}
+        # Simple lock for concurrent access safety
+        self._lock = threading.Lock()
 
     def assign_tokens(
         self, entities_by_field: dict[str, list[PIIEntity]]
@@ -49,11 +56,11 @@ class GlobalEntityTracker:
         # First pass: collect all unique entities
         unique_entities = self._deduplicate_entities(entities_by_field)
 
-        # Second pass: assign tokens to unique entities
-        entity_to_token = self._create_tokens_for_entities(unique_entities)
-
-        # Create value-based index mapping for name consistency
-        value_to_index = self._create_value_index_mapping(entity_to_token)
+        # Second pass: assign or reuse tokens persistently
+        entity_to_token = self._ensure_persistent_tokens(unique_entities)
+        
+        # Value-based index mapping for names from persistent map
+        value_to_index = {**self._name_index_by_value}
 
         # Third pass: map tokens back to original field structure
         result: dict[str, list[RedactionToken]] = {}
@@ -118,127 +125,18 @@ class GlobalEntityTracker:
     ) -> dict[str, int]:
         """
         Create a mapping from normalized values to consistent token indices.
-        This ensures the same value gets the same index across different PII types.
-
-        For name-related types, we want "John" to always get the same index
-        whether it's detected as NAME_FIRST, NAME_MIDDLE, etc.
-        Also handles partial references like "Elizabeth Anderson" and "Anderson".
+        Legacy compatibility - now returns persistent map.
         """
-        value_to_index: dict[str, int] = {}
-
-        # Name-related types that should share indices for the same value
-        name_types = {
-            PIIType.PERSON,
-            PIIType.NAME_FIRST,
-            PIIType.NAME_MIDDLE,
-            PIIType.NAME_LAST,
-            PIIType.NAME_TITLE,
-        }
-
-        # Collect all name-related entities and their component words
-        word_to_indices: dict[str, set[int]] = {}
-        
-        for entity, token in entity_to_token.items():
-            if entity.type in name_types:
-                # Split compound names to handle both full and partial references
-                words = entity.value.split()
-                for word in words:
-                    # Normalize each word component
-                    normalized_word = word.strip(".,;:'\"").lower()
-                    if normalized_word:
-                        if normalized_word not in word_to_indices:
-                            word_to_indices[normalized_word] = set()
-                        word_to_indices[normalized_word].add(token.token_index)
-        
-        # Assign the minimum index for each word component
-        for word, indices in word_to_indices.items():
-            value_to_index[word] = min(indices)
-        
-        # Also map full normalized values
-        for entity, token in entity_to_token.items():
-            if entity.type in name_types:
-                normalized = self._normalize_value(entity.value)
-                if normalized not in value_to_index:
-                    value_to_index[normalized] = token.token_index
-                else:
-                    # Use the minimum index for consistency
-                    value_to_index[normalized] = min(
-                        value_to_index[normalized], token.token_index
-                    )
-
-        return value_to_index
+        return dict(self._name_index_by_value)
 
     def _create_tokens_for_entities(
         self, entities: list[PIIEntity]
     ) -> dict[PIIEntity, RedactionToken]:
         """Create redaction tokens for unique entities.
-
-        Non-name entities are numbered per type. Name-related entities
-        (PERSON/NAME_*) are numbered together based on document order
-        of their first appearance so components receive
-        consistent indices across types preserving the reading order.
+        
+        Legacy path now uses persistent assignment.
         """
-        entity_to_token: dict[PIIEntity, RedactionToken] = {}
-
-        name_types = {
-            PIIType.PERSON,
-            PIIType.NAME_FIRST,
-            PIIType.NAME_MIDDLE,
-            PIIType.NAME_LAST,
-            PIIType.NAME_TITLE,
-        }
-
-        # Group entities by type for separate numbering
-        entities_by_type: dict[PIIType, list[PIIEntity]] = {}
-
-        for entity in entities:
-            entities_by_type.setdefault(entity.type, []).append(entity)
-
-        # Process name types with separate counters for each subtype
-        for pii_type in name_types:
-            if pii_type not in entities_by_type:
-                continue
-                
-            type_entities = entities_by_type[pii_type]
-            
-            # Build ordering based on unique values in document order
-            def norm(e: PIIEntity) -> str:
-                return e.value.strip().lower()
-            
-            unique_values: list[str] = []
-            for e in type_entities:  # Keep original order from deduplication
-                v = norm(e)
-                if v not in unique_values:
-                    unique_values.append(v)
-            
-            value_to_index = {v: i + 1 for i, v in enumerate(unique_values)}
-            
-            for e in type_entities:
-                idx = value_to_index[norm(e)]
-                entity_to_token[e] = RedactionToken(
-                    original=e.value,
-                    pii_type=e.type,
-                    token_index=idx,
-                    entity=e,
-                )
-
-        # Assign tokens with consistent numbering per non-name type
-        for pii_type, type_entities in entities_by_type.items():
-            if pii_type in name_types:
-                continue  # Already processed above
-            # Sort by value for consistent ordering
-            sorted_entities = sorted(type_entities, key=lambda e: e.value)
-
-            for idx, entity in enumerate(sorted_entities, 1):
-                token = RedactionToken(
-                    original=entity.value,
-                    pii_type=entity.type,
-                    token_index=idx,
-                    entity=entity,
-                )
-                entity_to_token[entity] = token
-
-        return entity_to_token
+        return self._ensure_persistent_tokens(entities)
 
     def _find_token_for_entity(
         self,
@@ -303,6 +201,99 @@ class GlobalEntityTracker:
                 )
 
         return None
+
+    def _ensure_persistent_tokens(
+        self, entities: list[PIIEntity]
+    ) -> dict[PIIEntity, RedactionToken]:
+        """Assign or reuse tokens persistently across calls."""
+        entity_to_token: dict[PIIEntity, RedactionToken] = {}
+        name_types = {
+            PIIType.PERSON,
+            PIIType.NAME_FIRST,
+            PIIType.NAME_MIDDLE,
+            PIIType.NAME_LAST,
+            PIIType.NAME_TITLE,
+        }
+        
+        def norm(s: str) -> str:
+            return s.strip().lower()
+        
+        with self._lock:
+            if "NAME" not in self._token_counters:
+                self._token_counters["NAME"] = 0
+            
+            for entity in entities:
+                normalized = norm(entity.value)
+                
+                if entity.type in name_types:
+                    # Check if we've seen this name value before
+                    idx = self._name_index_by_value.get(normalized)
+                    
+                    # If not, check if any component word has been seen
+                    if idx is None:
+                        for word in normalized.split():
+                            w = word.strip(".,;:'\"")
+                            if w and w in self._name_index_by_value:
+                                idx = self._name_index_by_value[w]
+                                break
+                    
+                    # If still no index, create a new one
+                    if idx is None:
+                        self._token_counters["NAME"] += 1
+                        idx = self._token_counters["NAME"]
+                    
+                    # Register this value and its component words
+                    self._register_name_value_indices(normalized, idx)
+                    
+                    token = RedactionToken(
+                        original=entity.value,
+                        pii_type=entity.type,
+                        token_index=idx,
+                        entity=entity,
+                    )
+                    entity_to_token[entity] = token
+                    self._entity_map[(entity.type, normalized)] = token
+                    
+                else:
+                    # Non-name entities
+                    key = (entity.type, normalized)
+                    if key in self._entity_map:
+                        # Reuse existing token
+                        base = self._entity_map[key]
+                        token = RedactionToken(
+                            original=entity.value,
+                            pii_type=base.pii_type,
+                            token_index=base.token_index,
+                            entity=entity,
+                        )
+                        entity_to_token[entity] = token
+                    else:
+                        # Create new token with next index
+                        tname = entity.type.name
+                        self._token_counters[tname] = self._token_counters.get(tname, 0) + 1
+                        idx = self._token_counters[tname]
+                        
+                        token = RedactionToken(
+                            original=entity.value,
+                            pii_type=entity.type,
+                            token_index=idx,
+                            entity=entity,
+                        )
+                        entity_to_token[entity] = token
+                        self._entity_map[key] = token
+        
+        return entity_to_token
+
+    def _register_name_value_indices(self, normalized_value: str, idx: int) -> None:
+        """Register a name value and its component words with the given index."""
+        if normalized_value and normalized_value not in self._name_index_by_value:
+            self._name_index_by_value[normalized_value] = idx
+        
+        # Also register component words
+        for word in normalized_value.split():
+            w = word.strip(".,;:'\"")
+            if w and w not in self._name_index_by_value:
+                self._name_index_by_value[w] = idx
 
 
 class NameComponentTracker(GlobalEntityTracker):

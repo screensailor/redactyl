@@ -5,6 +5,7 @@ from redactyl.detectors.base import PIIDetector
 from redactyl.handlers import DefaultHallucinationHandler, HallucinationHandler
 from redactyl.protocols import NameParsingDetector
 from redactyl.types import PIIEntity, RedactionState, RedactionToken, UnredactionIssue
+from redactyl.utils import filter_overlapping_entities
 
 if TYPE_CHECKING:
     from redactyl.pydantic_integration import PIIConfig
@@ -344,22 +345,4 @@ class PIILoop:
     def _filter_overlapping_entities(
         self, entities: list[PIIEntity]
     ) -> list[PIIEntity]:
-        if not entities:
-            return []
-
-        # Sort by start position, then by length (descending), then by confidence (descending)
-        # This prefers longer, more specific entities over shorter ones
-        sorted_entities = sorted(
-            entities, key=lambda e: (e.start, -(e.end - e.start), -e.confidence)
-        )
-
-        filtered: list[PIIEntity] = []
-        last_end = -1
-
-        for entity in sorted_entities:
-            # Skip if this entity overlaps with a previously selected one
-            if entity.start >= last_end:
-                filtered.append(entity)
-                last_end = entity.end
-
-        return filtered
+        return filter_overlapping_entities(entities)
