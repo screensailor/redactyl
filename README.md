@@ -211,6 +211,49 @@ python -m spacy download en_core_web_sm
 - Callbacks: `on_detection`, `on_hallucination`, `on_gliner_unavailable`, `on_batch_error`, `on_unredaction_issue`, `on_gliner_model_error`.
 - Streaming: yields are unredacted to callers; `on_stream_complete(state)` exposes the final `RedactionState` for persistence.
 
+## Keep Tokens with `pii(unredact=False)`
+
+Sometimes you need redacted tokens to remain redacted in outputs (e.g., audit logs, downstream pipelines, or compliance scenarios). You can mark output fields to never unredact with `pii(unredact=False)`. Unredaction is treated as a subtree toggle: nothing within that field is unredacted.
+
+Example:
+
+```python
+from typing import Annotated
+from pydantic import BaseModel
+from redactyl.pydantic_integration import PIIConfig, pii
+from redactyl.types import PIIType
+
+class Input(BaseModel):
+    name: str
+    email: str
+
+class AuditLog(BaseModel):
+    expose_email: Annotated[str, pii(PIIType.EMAIL)]       # unredacts by default
+    audit_email: Annotated[str, pii(unredact=False)]       # stays as [EMAIL_1]
+    message: str
+
+config = PIIConfig()  # use default detectors
+
+@config.protect
+def create_log(inp: Input) -> AuditLog:
+    # Inside: inp.name and inp.email are redacted tokens
+    return AuditLog(
+        expose_email=inp.email,
+        audit_email=inp.email,          # remains token on exit
+        message=f"Processed {inp.name}" # unredacts on exit
+    )
+
+out = create_log(Input(name="John Doe", email="john@example.com"))
+assert out.expose_email == "john@example.com"
+assert out.audit_email.startswith("[EMAIL_")   # stays redacted
+assert "John Doe" in out.message
+```
+
+Notes:
+- Default behavior is `unredact=True`, preserving backward compatibility.
+- `unredact=False` applies to the entire field subtree (nested models/containers).
+- Precedence: `detect=False` means the field is skipped entirely during both protection and unprotection.
+
 ## Known Limitations
 
 - **Text Length**: The underlying spaCy models have a maximum text length of 1 million characters. Texts exceeding this limit will raise an error. For longer documents, consider processing them in chunks.

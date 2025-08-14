@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. This project adheres to semantic versioning.
 
+## v0.4.0 — 2025-08-14
+
+### New Features
+- Added `pii(unredact=False)` option to keep fields redacted in outputs
+  - Useful for audit logs, compliance scenarios, and downstream pipelines
+  - Applies to entire field subtree (nested models and containers)
+  - Works seamlessly with streaming (sync/async generators)
+
+### Improvements
+- Enhanced `pii()` docstring with comprehensive examples
+- Added dedicated README section explaining the unredact feature
+
 ## v0.3.1 — 2025-08-14
 
 ### Fixed

@@ -1078,21 +1078,36 @@ def pii(
 
     Args:
         pii_type: Optional explicit PII type (auto-detected if not provided)
-        detect: Whether to detect PII in this field (for inputs)
+        detect: Whether to detect PII in this field during protection
+                (detect=False skips both detection and unprotection for this field)
         parse_components: For name fields, whether to parse into components
-        unredact: Whether to unredact this field (for outputs)
+        unredact: Whether to unredact this field during outputs. When False, anything within
+                  this field's subtree remains as redaction tokens (e.g., "[EMAIL_1]") even on exit.
         **field_kwargs: Additional Pydantic Field arguments
 
     Returns:
         Annotated field with PII configuration
 
-    Example:
-        ```python
+    Examples:
+        # Default: unredact on output
         class User(BaseModel):
-            name: Annotated[str, pii(PIIType.PERSON, parse_components=True)]
             email: Annotated[str, pii(PIIType.EMAIL)]
-            notes: str  # Will be auto-detected
-        ```
+
+        # Keep tokens in outputs for audit/compliance
+        class Audit(BaseModel):
+            audit_email: Annotated[str, pii(unredact=False)]
+
+        # Subtree behavior: entire nested model remains tokens
+        class Payload(BaseModel):
+            name: str
+            email: str
+
+        class Event(BaseModel):
+            payload: Annotated[Payload, pii(unredact=False)]  # nothing inside is unredacted
+
+        # Precedence: detect=False skips processing entirely for this field
+        class Notes(BaseModel):
+            bio: Annotated[str, pii(detect=False)]  # no detection, no unprotection
     """
     config = PIIFieldConfig(pii_type=pii_type, detect=detect, parse_components=parse_components, unredact=unredact)
 
@@ -1275,8 +1290,10 @@ class PydanticPIIProtector:
         Returns:
             Tuple of (unprotected model copy, list of issues)
         """
-        # Extract all string fields with their paths
-        fields_to_process = self._extract_string_fields(model, path_prefix)
+        # Extract all string fields with their paths, respecting unredact=False metadata
+        fields_to_process = self._extract_string_fields_unprotect(
+            model, path_prefix, allow_unredact=True
+        )
 
         if not fields_to_process:
             # No string fields to process
@@ -1295,6 +1312,68 @@ class PydanticPIIProtector:
         unprotected_model = self._apply_protected_data(model, unprotected_data, path_prefix)
 
         return unprotected_model, all_issues
+
+    def _extract_string_fields_unprotect(
+        self, model: BaseModel, path_prefix: str = "", allow_unredact: bool = True
+    ) -> dict[str, str]:
+        """
+        Extract string fields for unprotection, respecting field-level unredact flags.
+
+        - Skips entire subtrees for fields annotated with pii(unredact=False)
+        - Also respects detect=False (consistent with existing extraction behavior)
+        """
+        fields: dict[str, str] = {}
+
+        for field_name, field_value in model.model_dump().items():
+            field_path = f"{path_prefix}.{field_name}" if path_prefix else field_name
+
+            # Get field info to check for PII configuration
+            field_info = model.__class__.model_fields.get(field_name)
+
+            # Determine if this subtree allows unredaction
+            field_allows_unredact = allow_unredact
+            skip_field_detect = False
+            if field_info and hasattr(field_info, "metadata"):
+                for meta in field_info.metadata:
+                    if isinstance(meta, PIIFieldConfig):
+                        # Respect detect flag (consistent with protect extractor)
+                        if not meta.detect:
+                            skip_field_detect = True
+                        # New: respect unredact flag to prevent unredaction in this subtree
+                        if not meta.unredact:
+                            field_allows_unredact = False
+
+            # If detection is disabled for this field, skip entirely
+            if skip_field_detect:
+                continue
+
+            # If unredaction is not allowed for this subtree, skip collecting any values
+            if not field_allows_unredact:
+                continue
+
+            if isinstance(field_value, str):
+                fields[field_path] = field_value
+            elif isinstance(field_value, BaseModel):
+                # Recurse into nested model with the current allowance
+                nested_fields = self._extract_string_fields_unprotect(
+                    field_value, field_path, allow_unredact=field_allows_unredact
+                )
+                fields.update(nested_fields)
+            elif isinstance(field_value, dict):
+                # Only traverse dict if unredaction is allowed (it is here)
+                self._extract_from_dict(field_value, field_path, fields)
+            elif isinstance(field_value, list):
+                for idx, item in enumerate(field_value):  # type: ignore[arg-type]
+                    item_path = f"{field_path}[{idx}]"
+                    if isinstance(item, str):
+                        fields[item_path] = item
+                    elif isinstance(item, BaseModel):
+                        nested_fields = self._extract_string_fields_unprotect(
+                            item, item_path, allow_unredact=field_allows_unredact
+                        )
+                        fields.update(nested_fields)
+
+        return fields
 
     def _extract_string_fields(self, model: BaseModel, path_prefix: str = "") -> dict[str, str]:
         """
