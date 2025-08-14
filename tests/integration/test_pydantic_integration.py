@@ -16,7 +16,7 @@ from redactyl.pydantic_integration import (
     HallucinationResponse,
     PIIConfig,
     PydanticPIIProtector,
-    pii_field,
+    pii,
 )
 from redactyl.types import PIIEntity, PIIType, UnredactionIssue
 
@@ -76,10 +76,10 @@ class CustomerData(BaseModel):
 class AnnotatedUser(BaseModel):
     """User model with PII field annotations - input."""
 
-    name: Annotated[str, pii_field(PIIType.PERSON, parse_components=True)]
-    email: Annotated[str, pii_field(PIIType.EMAIL)]
-    phone: Annotated[str | None, pii_field(PIIType.PHONE)] = None
-    bio: Annotated[str, pii_field(detect=False)] = ""  # Skip detection
+    name: Annotated[str, pii(PIIType.PERSON, parse_components=True)]
+    email: Annotated[str, pii(PIIType.EMAIL)]
+    phone: Annotated[str | None, pii(PIIType.PHONE)] = None
+    bio: Annotated[str, pii(detect=False)] = ""  # Skip detection
     notes: str = ""  # Auto-detect
 
 

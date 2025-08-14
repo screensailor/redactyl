@@ -1065,7 +1065,7 @@ class PIIFieldConfig:
     unredact: bool = True  # Whether to unredact this field in outputs
 
 
-def pii_field(
+def pii(
     pii_type: PIIType | None = None,
     *,
     detect: bool = True,
@@ -1089,8 +1089,8 @@ def pii_field(
     Example:
         ```python
         class User(BaseModel):
-            name: Annotated[str, pii_field(PIIType.PERSON, parse_components=True)]
-            email: Annotated[str, pii_field(PIIType.EMAIL)]
+            name: Annotated[str, pii(PIIType.PERSON, parse_components=True)]
+            email: Annotated[str, pii(PIIType.EMAIL)]
             notes: str  # Will be auto-detected
         ```
     """

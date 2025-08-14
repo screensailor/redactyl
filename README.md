@@ -207,9 +207,13 @@ python -m spacy download en_core_web_sm
 
 - `@pii.protect`: Auto-protects Pydantic `BaseModel` args, traverses containers, and unprotects returns and yields (membrane behavior).
 - Function modes: Detects sync, async, generator, and async-generator transparently.
-- `pii_field(...)`: Annotate fields for explicit types or to disable detection per-field.
+- `pii(...)`: Annotate fields for explicit types or to disable detection per-field.
 - Callbacks: `on_detection`, `on_hallucination`, `on_gliner_unavailable`, `on_batch_error`, `on_unredaction_issue`, `on_gliner_model_error`.
 - Streaming: yields are unredacted to callers; `on_stream_complete(state)` exposes the final `RedactionState` for persistence.
+
+## Known Limitations
+
+- **Text Length**: The underlying spaCy models have a maximum text length of 1 million characters. Texts exceeding this limit will raise an error. For longer documents, consider processing them in chunks.
 
 ## v0.2.0 Highlights
 

@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. This project adheres to semantic versioning.
 
+## v0.3.0 — 2025-08-14
+
+### Breaking Changes
+- Renamed `pii_field` to `pii` for better ergonomics in field annotations
+
+### Improvements
+- Simplified architecture by removing all output entity detection (stronger membrane principle)
+- Removed `detect_output_entities` parameter - no longer needed
+- `on_stream_complete` now only receives input-derived state
+- Documented spaCy's 1M character limit for text processing
+
+### Philosophy
+The membrane principle is now absolute: functions cannot produce PII they never received. This eliminates false positives on generated content and makes the library more predictable.
+
 ## v0.2.2 — 2025-08-14
 
 - Breaking: Removed all output/yield entity detection to uphold the membrane principle.

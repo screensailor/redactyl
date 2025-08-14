@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from redactyl import PIILoop
 from redactyl.detectors.presidio import PresidioDetector
-from redactyl.pydantic_integration import PIIConfig, pii_field
+from redactyl.pydantic_integration import PIIConfig, pii
 from redactyl.session import PIISession
 from redactyl.types import PIIType
 
@@ -105,7 +105,7 @@ class TestPydanticDetectFlag:
             # This field should be detected
             name: str
             # This field should be skipped
-            internal_id: Annotated[str, pii_field(detect=False)]
+            internal_id: Annotated[str, pii(detect=False)]
             # This field should also be detected
             email: str
         
@@ -155,7 +155,7 @@ class TestPydanticDetectFlag:
             street: str
             city: str
             # Zip code should not be detected as PII
-            zip_code: Annotated[str, pii_field(detect=False)]
+            zip_code: Annotated[str, pii(detect=False)]
         
         class Person(BaseModel):
             name: str

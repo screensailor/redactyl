@@ -9,7 +9,7 @@ from redactyl.handlers import DefaultHallucinationHandler, HallucinationHandler
 from redactyl.pydantic_integration import (
     HallucinationResponse,
     PIIConfig,
-    pii_field,
+    pii,
 )
 from redactyl.session import PIISession
 from redactyl.types import (
@@ -34,6 +34,6 @@ __all__ = [
     "RedactionToken",
     "UnredactionIssue",
     "PIIConfig",
-    "pii_field",
+    "pii",
     "CallbackContext",
 ]

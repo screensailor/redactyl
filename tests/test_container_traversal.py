@@ -4,14 +4,14 @@ from typing import Annotated
 from pydantic import BaseModel
 
 from redactyl.detectors.presidio import PresidioDetector
-from redactyl.pydantic_integration import PIIConfig, pii_field
+from redactyl.pydantic_integration import PIIConfig, pii
 
 
 class User(BaseModel):
     """Test model with PII fields."""
     name: str
     email: str
-    internal_id: Annotated[str, pii_field(detect=False)]
+    internal_id: Annotated[str, pii(detect=False)]
 
 
 def test_container_traversal_args_and_returns():

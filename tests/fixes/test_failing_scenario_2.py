@@ -3,14 +3,14 @@ from typing import Annotated
 import rich
 from pydantic import BaseModel
 
-from redactyl.pydantic_integration import PIIType, pii_field
+from redactyl.pydantic_integration import PIIType, pii
 from tests.utils.decorator import capture_redacted_input
 
 
 class Input(BaseModel):
-    session_id: Annotated[str, pii_field(pii_type=None)]
-    case_id: Annotated[str, pii_field(pii_type=None)]
-    user: Annotated[str, pii_field(pii_type=PIIType.EMAIL)]
+    session_id: Annotated[str, pii(pii_type=None)]
+    case_id: Annotated[str, pii(pii_type=None)]
+    user: Annotated[str, pii(pii_type=PIIType.EMAIL)]
     query: str
     context: str
 
