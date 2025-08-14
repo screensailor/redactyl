@@ -40,13 +40,13 @@ class PIIFieldMetadata:
 
 ```python
 # Simple static PII (most common case)
-email: Annotated[str, pii_field(PIIType.EMAIL)]
+email: Annotated[str, pii(PIIType.EMAIL)]
 
 # Dynamic detection
-notes: Annotated[str, pii_field(strategy=DetectionStrategy.DYNAMIC)]
+notes: Annotated[str, pii(strategy=DetectionStrategy.DYNAMIC)]
 
 # Hybrid with hints
-bio: Annotated[str, pii_field(
+bio: Annotated[str, pii(
     PIIType.EMAIL, PIIType.PHONE,
     strategy=DetectionStrategy.HYBRID
 )]
@@ -223,8 +223,8 @@ class User(BaseModel):
 
 # After
 class User(BaseModel):
-    email: Annotated[str, pii_field(PIIType.EMAIL)]
-    bio: Annotated[str, pii_field(strategy=DetectionStrategy.DYNAMIC)]
+    email: Annotated[str, pii(PIIType.EMAIL)]
+    bio: Annotated[str, pii(strategy=DetectionStrategy.DYNAMIC)]
 ```
 
 ### From Custom Detection Logic

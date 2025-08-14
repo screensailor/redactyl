@@ -45,15 +45,15 @@ Drop a decorator and keep coding. Redactyl figures it out.
 ```python
 from typing import Annotated
 from pydantic import BaseModel
-from redactyl.pydantic_integration import PIIConfig, pii_field
+from redactyl.pydantic_integration import PIIConfig, pii
 from redactyl.types import PIIType
 
 # Zero-config to start; tuned via PIIConfig kwargs
 pii = PIIConfig()
 
 class Email(BaseModel):
-    sender_name: Annotated[str, pii_field(PIIType.PERSON, parse_components=True)]
-    sender_email: Annotated[str, pii_field(PIIType.EMAIL)]
+    sender_name: Annotated[str, pii(PIIType.PERSON, parse_components=True)]
+    sender_email: Annotated[str, pii(PIIType.EMAIL)]
     subject: str  # auto-detected
     body: str     # auto-detected
 
@@ -96,14 +96,14 @@ Name intelligence:
 ```python
 from pydantic import BaseModel
 from typing import Annotated
-from redactyl.pydantic_integration import PIIConfig, pii_field
+from redactyl.pydantic_integration import PIIConfig, pii
 from redactyl.types import PIIType
 
 pii = PIIConfig()
 
 class Message(BaseModel):
-    user: Annotated[str, pii_field(PIIType.PERSON, parse_components=True)]
-    email: Annotated[str, pii_field(PIIType.EMAIL)]
+    user: Annotated[str, pii(PIIType.PERSON, parse_components=True)]
+    email: Annotated[str, pii(PIIType.EMAIL)]
     text: str  # auto-detected
 
 @pii.protect
@@ -262,16 +262,16 @@ def handle_llm_mistakes(issues):
 pii = PIIConfig(on_hallucination=handle_llm_mistakes)
 ```
 
-Field-level control with `pii_field`:
+Field-level control with `pii`:
 
 ```python
 class User(BaseModel):
     # force detection as a PERSON and parse components
-    name: Annotated[str, pii_field(PIIType.PERSON, parse_components=True)]
+    name: Annotated[str, pii(PIIType.PERSON, parse_components=True)]
     # mark as email explicitly
-    email: Annotated[str, pii_field(PIIType.EMAIL)]
+    email: Annotated[str, pii(PIIType.EMAIL)]
     # or disable detection for a field
-    notes: Annotated[str, pii_field(detect=False)]
+    notes: Annotated[str, pii(detect=False)]
 ```
 
 ## Development

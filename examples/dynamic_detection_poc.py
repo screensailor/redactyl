@@ -39,7 +39,7 @@ DynamicPII: TypeAlias = Annotated[str, PIIFieldMetadata(strategy=DetectionStrate
 HybridPII: TypeAlias = Annotated[str, PIIFieldMetadata(strategy=DetectionStrategy.HYBRID)]
 
 
-def pii_field(
+def pii(
     *types: PIIType,
     strategy: DetectionStrategy = DetectionStrategy.STATIC,
     confidence_threshold: float = 0.7,
@@ -60,17 +60,17 @@ class SupportTicket(BaseModel):
     
     # Static fields - we know what they are
     id: str
-    user_email: Annotated[str, pii_field(PIIType.EMAIL)]
+    user_email: Annotated[str, pii(PIIType.EMAIL)]
     
     # Dynamic fields - might contain PII
-    subject: Annotated[str, pii_field(strategy=DetectionStrategy.DYNAMIC)]
-    description: Annotated[str, pii_field(
+    subject: Annotated[str, pii(strategy=DetectionStrategy.DYNAMIC)]
+    description: Annotated[str, pii(
         strategy=DetectionStrategy.DYNAMIC,
         scan_depth="deep"
     )]
     
     # Hybrid field - primarily one type but might have others
-    internal_notes: Annotated[str, pii_field(
+    internal_notes: Annotated[str, pii(
         PIIType.PERSON,  # Usually contains customer names
         strategy=DetectionStrategy.HYBRID,
         confidence_threshold=0.8
@@ -81,11 +81,11 @@ class UserProfile(BaseModel):
     """Example with simple static fields and complex dynamic field."""
     
     # Clean ergonomic API for simple cases
-    email: Annotated[str, pii_field(PIIType.EMAIL)]
-    phone: Annotated[str, pii_field(PIIType.PHONE)]
+    email: Annotated[str, pii(PIIType.EMAIL)]
+    phone: Annotated[str, pii(PIIType.PHONE)]
     
     # Complex field with multiple possible PII types
-    bio: Annotated[str, pii_field(
+    bio: Annotated[str, pii(
         PIIType.EMAIL, PIIType.PHONE, PIIType.ADDRESS,
         strategy=DetectionStrategy.DYNAMIC
     )]

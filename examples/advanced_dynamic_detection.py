@@ -16,7 +16,7 @@ from redactyl.detectors import BaseDetector
 
 # Import from our POC
 from dynamic_detection_poc import (
-    DetectionStrategy, PIIFieldMetadata, pii_field,
+    DetectionStrategy, PIIFieldMetadata, pii,
     SimpleDynamicDetector
 )
 
@@ -203,17 +203,17 @@ class CustomerInteraction(BaseModel):
     timestamp: str
     
     # Known PII fields
-    customer_email: Annotated[str, pii_field(PIIType.EMAIL)]
+    customer_email: Annotated[str, pii(PIIType.EMAIL)]
     agent_id: str  # Not PII
     
     # Dynamic content fields
-    chat_transcript: Annotated[str, pii_field(
+    chat_transcript: Annotated[str, pii(
         strategy=DetectionStrategy.DYNAMIC,
         scan_depth="deep",
         confidence_threshold=0.6
     )]
     
-    resolution_notes: Annotated[str, pii_field(
+    resolution_notes: Annotated[str, pii(
         PIIType.PERSON,  # Expect names
         strategy=DetectionStrategy.HYBRID,
         confidence_threshold=0.7
