@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. This project adheres to semantic versioning.
 
+## v0.3.1 — 2025-08-14
+
+### Fixed
+- Updated all remaining `pii_field` references to `pii` in documentation and examples
+
 ## v0.3.0 — 2025-08-14
 
 ### Breaking Changes
