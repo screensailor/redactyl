@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. This project adheres to semantic versioning.
 
+## v0.2.2 — 2025-08-14
+
+- Breaking: Removed all output/yield entity detection to uphold the membrane principle.
+- Breaking: Removed `detect_output_entities` parameter from `PIIConfig`.
+- Change: `on_stream_complete` now receives the input-derived `RedactionState` (args only).
+- Simplified: Reduced complexity and false-positive surface on generated content.
+- Tests/Docs: Updated streaming tests and README to reflect input-only state.
+
 ## v0.2.1 — 2025-08-13
 
 - Fixed: Critical streaming bug where generators were yielding redacted tokens instead of unredacted values.

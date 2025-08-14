@@ -129,7 +129,7 @@ class In(BaseModel):
 class Out(BaseModel):
     content: str
 
-# Optional: observe state after a stream completes (for persistence/debugging)
+# Optional: observe input-derived state after a stream completes (for persistence/debugging)
 captured_state = None
 pii = PIIConfig(on_stream_complete=lambda st: globals().__setitem__("captured_state", st))
 
@@ -148,15 +148,13 @@ async for part in chat_stream(In(content="Email me at john@example.com")):
 
 Notes:
 - Works with async and sync generators alike.
-- State tracking persists across yields to keep token indices stable internally.
-- `on_stream_complete(state)` exposes the final `RedactionState` for persistence or auditing; it isn’t needed to consume the stream.
+- `on_stream_complete(state)` exposes the final input-based `RedactionState` for persistence or auditing; it isn’t needed to consume the stream.
 
 ### Streaming State Tracking
 
 - Source of truth: only function arguments build the redaction map.
 - Unredaction on exit: every yielded or returned value is unredacted using that map.
-- Stable indices: during streaming, Redactyl tracks observed tokens for monitoring, keeping numbering consistent across yields.
-- Persistence hook: capture the final `RedactionState` with `on_stream_complete` if you need to store tokenized logs or reconcile offline data.
+- Persistence hook: capture the final input-derived `RedactionState` with `on_stream_complete` if you need to store state for later unredaction.
 
 ### 3) Containers: Lists, Dicts, Sets, Tuples, Frozensets
 

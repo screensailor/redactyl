@@ -174,8 +174,8 @@ class PIIConfig:
             traverse_containers: Whether to traverse and protect containers of models
                                (list, dict, tuple, set, frozenset). Default: True
             on_stream_complete: Callback invoked when streaming completes, receiving
-                              the accumulated RedactionState. Useful for retrieving
-                              state after streaming for later unredaction.
+                              the input RedactionState (built from arguments only).
+                              Useful for retrieving state for later unredaction.
 
         Example:
             ```python
@@ -361,8 +361,6 @@ class PIIConfig:
             protected_args: list[Any] = []
             protected_kwargs: dict[str, Any] = {}
             input_state = RedactionState()
-            # Track tokens observed in yields for persistence/monitoring
-            observed_state = RedactionState()
 
             # Bind arguments to get parameter names
             bound = sig.bind(*args, **kwargs)
@@ -444,10 +442,6 @@ class PIIConfig:
                 async for item in func(*protected_args, **protected_kwargs):
                     # Only unredact yields using the input_state; never protect yields
                     if isinstance(item, BaseModel):
-                        # Observe tokens present in the yielded item without affecting unredaction
-                        _, item_state_observed = protector.protect_model(item)
-                        observed_state = observed_state.merge(item_state_observed)
-
                         unprotected_item, issues = protector.unprotect_model(item, input_state)
                         if issues and self.on_hallucination:
                             responses = self.on_hallucination(issues)
@@ -471,9 +465,6 @@ class PIIConfig:
                         yield unprotected_item
                     else:
                         if self.traverse_containers:
-                            # Observe tokens in yielded containers without affecting unredaction
-                            _, item_state_observed = protector.protect_any(item)
-                            observed_state = observed_state.merge(item_state_observed)
                             # Unredact containers/strings directly using input_state
                             unprotected_any = self._unprotect_and_handle_hallucinations(item, protector, input_state)
                             yield unprotected_any
@@ -483,8 +474,8 @@ class PIIConfig:
             finally:
                 # Notify completion with accumulated state
                 if callable(self.on_stream_complete):
-                    # Expose the observed tokens from the stream for persistence/monitoring
-                    self.on_stream_complete(observed_state)
+                    # Expose the input-derived state for persistence
+                    self.on_stream_complete(input_state)
 
         return async_gen_wrapper
 
@@ -533,8 +524,6 @@ class PIIConfig:
             protected_args: list[Any] = []
             protected_kwargs: dict[str, Any] = {}
             input_state = RedactionState()
-            # Track tokens observed in yields for persistence/monitoring
-            observed_state = RedactionState()
 
             # Bind arguments to get parameter names
             bound = sig.bind(*args, **kwargs)
@@ -616,10 +605,6 @@ class PIIConfig:
                 for item in func(*protected_args, **protected_kwargs):
                     # Only unredact yields using the input_state; never protect yields
                     if isinstance(item, BaseModel):
-                        # Observe tokens present in the yielded item without affecting unredaction
-                        _, item_state_observed = protector.protect_model(item)
-                        observed_state = observed_state.merge(item_state_observed)
-
                         unprotected_item, issues = protector.unprotect_model(item, input_state)
                         if issues and self.on_hallucination:
                             responses = self.on_hallucination(issues)
@@ -643,9 +628,6 @@ class PIIConfig:
                         yield unprotected_item
                     else:
                         if self.traverse_containers:
-                            # Observe tokens in yielded containers without affecting unredaction
-                            _, item_state_observed = protector.protect_any(item)
-                            observed_state = observed_state.merge(item_state_observed)
                             # Unredact containers/strings directly using input_state
                             unprotected_any = self._unprotect_and_handle_hallucinations(item, protector, input_state)
                             yield unprotected_any
@@ -655,8 +637,8 @@ class PIIConfig:
             finally:
                 # Notify completion with accumulated state
                 if callable(self.on_stream_complete):
-                    # Expose the observed tokens from the stream for persistence/monitoring
-                    self.on_stream_complete(observed_state)
+                    # Expose the input-derived state for persistence
+                    self.on_stream_complete(input_state)
 
         return gen_wrapper
 
@@ -1080,6 +1062,7 @@ class PIIFieldConfig:
     pii_type: PIIType | None = None
     detect: bool = True
     parse_components: bool = False  # For name fields
+    unredact: bool = True  # Whether to unredact this field in outputs
 
 
 def pii_field(
@@ -1087,6 +1070,7 @@ def pii_field(
     *,
     detect: bool = True,
     parse_components: bool = False,
+    unredact: bool = True,
     **field_kwargs: Any,
 ) -> Any:
     """
@@ -1094,8 +1078,9 @@ def pii_field(
 
     Args:
         pii_type: Optional explicit PII type (auto-detected if not provided)
-        detect: Whether to detect PII in this field
+        detect: Whether to detect PII in this field (for inputs)
         parse_components: For name fields, whether to parse into components
+        unredact: Whether to unredact this field (for outputs)
         **field_kwargs: Additional Pydantic Field arguments
 
     Returns:
@@ -1109,7 +1094,7 @@ def pii_field(
             notes: str  # Will be auto-detected
         ```
     """
-    config = PIIFieldConfig(pii_type=pii_type, detect=detect, parse_components=parse_components)
+    config = PIIFieldConfig(pii_type=pii_type, detect=detect, parse_components=parse_components, unredact=unredact)
 
     # Create Pydantic Field with our config in metadata
     field_info = Field(**field_kwargs)
